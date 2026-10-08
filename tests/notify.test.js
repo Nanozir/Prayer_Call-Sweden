@@ -32,4 +32,5 @@ test('sound choice selects the channel', () => {
   const ch = (sound) => prayerNotifications({ x: sched }, opts({ sound, offset: 5 }), now).slice(0, 2).map((n) => n.channelId);
   assert.deepEqual(ch('bells'), ['before_chime', 'prayer_bells']);
   assert.deepEqual(ch('off'), ['before_silent', 'prayer_silent']);
+  assert.deepEqual(ch('adhan'), ['before_chime', 'prayer_adhan']);
 });

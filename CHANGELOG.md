@@ -3,6 +3,13 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.3.0] – 2026-10-08
+
+### Nytt
+- **Böneutrop som notisljud** (ca 15 s, lågmält, med mjuk uttoning). Välj det under
+  Inställningar → "Ljud vid bönetiden". Inspelningen kommer från Wikimedia Commons och är
+  CC0 (fri att använda) – se `assets-src/ADHAN-SOURCE.md`.
+
 ## [1.2.0] – 2026-10-08
 
 ### Nytt

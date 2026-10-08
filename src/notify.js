@@ -10,6 +10,7 @@ import { coverageEnd, scheduleStatus } from './store.js';
 // Android ties sound to the notification channel (fixed once created), so each
 // sound choice gets its own channel. Sound files live in android/.../res/raw.
 const CHANNELS = {
+  prayer_adhan: { name: 'Bönetid – böneutrop', sound: 'salah_adhan.ogg' },
   prayer_bells: { name: 'Bönetid – klockspel', sound: 'salah_bells.wav' },
   prayer_chime: { name: 'Bönetid – kort ljud', sound: 'salah_chime.wav' },
   prayer_silent: { name: 'Bönetid – utan ljud', sound: 'salah_silent.wav' },
@@ -23,12 +24,14 @@ const MAX = Capacitor.getPlatform() === 'ios' ? 60 : 400;
 const REMINDER_ID_BASE = 2_000_000_000;
 
 export const SOUND_OPTIONS = [
+  { value: 'adhan', label: 'Böneutrop (ca 15 s)', file: 'salah_adhan.ogg' },
   { value: 'bells', label: 'Klockspel (ca 5 s)', file: 'salah_bells.wav' },
   { value: 'chime', label: 'Kort ljud (ca 2 s)', file: 'salah_chime.wav' },
   { value: 'off', label: 'Inget ljud (bara vibration)', file: null },
 ];
 
-const prayerChannel = (sound) => (sound === 'bells' ? 'prayer_bells' : sound === 'chime' ? 'prayer_chime' : 'prayer_silent');
+const PRAYER_CHANNEL = { adhan: 'prayer_adhan', bells: 'prayer_bells', chime: 'prayer_chime', off: 'prayer_silent' };
+const prayerChannel = (sound) => PRAYER_CHANNEL[sound] ?? 'prayer_chime';
 const beforeChannel = (sound) => (sound === 'off' ? 'before_silent' : 'before_chime');
 
 async function ensureChannels() {

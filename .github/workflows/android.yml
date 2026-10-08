@@ -91,7 +91,7 @@ jobs:
           done
           # Release builds shorten resource file paths, so check resource names instead.
           resources="$("$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/aapt2" dump resources "$apk")"
-          for f in salah_bells salah_chime salah_silent; do
+          for f in salah_adhan salah_bells salah_chime salah_silent; do
             grep "raw/$f" <<< "$resources" || { echo "::error::Notisljudet $f saknas i APK:n"; exit 1; }
           done
 
