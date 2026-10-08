@@ -89,8 +89,10 @@ jobs:
           for f in worker.min.js lang/eng.traineddata.bin core/tesseract-core-simd-lstm.wasm.js core/tesseract-core-lstm.wasm.js; do
             unzip -l "$apk" "assets/public/tesseract/$f" >/dev/null || { echo "::error::$f saknas i APK:n"; exit 1; }
           done
+          # Release builds shorten resource file paths, so check resource names instead.
+          resources="$("$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/aapt2" dump resources "$apk")"
           for f in salah_bells salah_chime salah_silent; do
-            unzip -l "$apk" | grep -q "res/raw/$f.wav" || { echo "::error::Notisljudet $f saknas i APK:n"; exit 1; }
+            grep "raw/$f" <<< "$resources" || { echo "::error::Notisljudet $f saknas i APK:n"; exit 1; }
           done
 
       - name: Döp om APK
