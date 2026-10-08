@@ -55,7 +55,7 @@ async function buildWorkerSource(onProgress) {
   onProgress(0.03, 'Laddar textigenkänningen…');
   const coreFile = hasWasmSimd() ? 'tesseract-core-simd-lstm.wasm.js' : 'tesseract-core-lstm.wasm.js';
   const [lang, core, worker] = await Promise.all([
-    fetchAsset('lang/eng.traineddata.gz'),
+    fetchAsset('lang/eng.traineddata.bin'),
     fetchAsset(`core/${coreFile}`, 'text'),
     fetchAsset('worker.min.js', 'text'),
   ]);

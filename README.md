@@ -57,6 +57,13 @@ Byggen signeras med en reservnyckel som ligger i repot. För en hemlig nyckel:
    inlagda scheman behöver läggas in igen). Spara nyckeln säkert – utan den kan appen inte
    uppdateras.
 
+## Ljud
+
+- Klockspel och kort ljud genereras av `scripts/make-sounds.mjs`.
+- Böneutropet kommer från [Beautiful adhan.ogg](https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg)
+  (Adam-synagda, CC0) och kortas/sänks av `scripts/fetch-adhan.sh` via flödet
+  *Hämta böneutrop* – detaljer i `assets-src/ADHAN-SOURCE.md`.
+
 ## Versioner och releaser
 
 Versionsnumret finns på ett ställe: `version` i `package.json`. Därifrån hämtar appen
@@ -80,6 +87,7 @@ Pushar utan ny version bygger och testar bara (APK finns som artefakt under Acti
 npm install
 npm test            # enhetstester (rättningslogik, tidszoner)
 npm run test:ocr    # läser in exempelbilden i Chromium och jämför alla 186 tider
+npm run sounds      # genererar om notisljuden (lågmälda klocktoner)
 npm run build && npx cap sync android   # öppna sedan android/ i Android Studio
 ```
 

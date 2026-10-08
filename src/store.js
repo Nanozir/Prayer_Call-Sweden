@@ -9,7 +9,8 @@ const SETTINGS = 'settings';
 
 export const DEFAULT_SETTINGS = {
   enabled: { fajr: true, shuruk: false, dhohr: true, asr: true, magrib: true, isha: true },
-  offset: 0, // minutes before the prayer time
+  offset: 0, // extra reminder this many minutes before the prayer time (0 = none)
+  sound: 'chime', // 'bells' | 'chime' | 'off' – sound at the prayer time
   reminders: true, // remind when a schedule is about to run out
 };
 

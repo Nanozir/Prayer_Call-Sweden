@@ -1,0 +1,33 @@
+name: Hämta böneutrop
+
+# Fetches and processes the CC0 adhan recording, then commits the result to the
+# same branch. Runs when the fetch script changes, or manually.
+on:
+  push:
+    paths: ['scripts/fetch-adhan.sh']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Installera ffmpeg (förbyggd, från npm)
+        run: npm install --no-save ffmpeg-static@5.3.0
+      - name: Hämta och bearbeta
+        timeout-minutes: 5
+        run: FFMPEG="$(node -p "require('ffmpeg-static')")" scripts/fetch-adhan.sh
+      - name: Committa ljudfilen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/res/raw/salah_adhan.ogg public/sounds/salah_adhan.ogg assets-src/ADHAN-SOURCE.md
+          git diff --cached --quiet && { echo "Ingen ändring."; exit 0; }
+          git commit -m "Add adhan notification sound (CC0, Wikimedia Commons)"
+          git push

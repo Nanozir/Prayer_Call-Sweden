@@ -7,7 +7,9 @@ import {
   loadSchedules, saveSchedule, deleteSchedule, loadSettings, saveSettings,
   scheduleStatus, todaysTimes, coverageEnd, nextPrayer,
 } from './store.js';
-import { rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative } from './notify.js';
+import {
+  rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative, SOUND_OPTIONS,
+} from './notify.js';
 import { validateSchedule, rowProblems } from './ocr/correct.js';
 
 const app = document.getElementById('app');
@@ -368,8 +370,12 @@ function markRow(tr, i) {
 function renderSettings() {
   const s = state.settings;
   const card = h(`<div><section class="card"><h2>Notiser</h2><div class="prayers"></div>
-    <div class="toggle"><span>Påminn i förväg</span>
-      <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Vid bönetiden'}</option>`).join('')}</select></div>
+    <div class="toggle"><span>Ljud vid bönetiden</span>
+      <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
+    <div class="row sound-row"><button class="secondary small" data-a="listen">▶ Lyssna</button>
+      <span class="muted">Ljuden är lågmälda från början. De följer telefonens notisvolym och hörs inte i tyst läge.</span></div>
+    <div class="toggle"><span>Extra påminnelse innan<br><small class="muted">Notisen vid bönetiden kommer alltid också</small></span>
+      <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Ingen'}</option>`).join('')}</select></div>
     <label class="toggle"><span>Påminn när schemat håller på att gå ut</span><input type="checkbox" data-f="reminders" ${s.reminders ? 'checked' : ''}/></label>
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
     <p class="muted msg"></p>
@@ -395,9 +401,18 @@ function renderSettings() {
     msg.textContent = n?.native ? `Sparat – ${n.scheduled ?? 0} notiser schemalagda.` : 'Sparat.';
   };
   card.querySelector('[data-f=offset]').onchange = (e) => { s.offset = +e.target.value; persist(); };
+  card.querySelector('[data-f=sound]').onchange = (e) => { s.sound = e.target.value; persist(); };
+  let preview = null;
+  card.querySelector('[data-a=listen]').onclick = () => {
+    const file = SOUND_OPTIONS.find((o) => o.value === s.sound)?.file;
+    preview?.pause();
+    if (!file) { msg.textContent = 'Inget ljud valt – notisen vibrerar bara.'; return; }
+    preview = new Audio(`sounds/${file}`);
+    preview.play().catch(() => { msg.textContent = 'Kunde inte spela upp ljudet.'; });
+  };
   card.querySelector('[data-f=reminders]').onchange = (e) => { s.reminders = e.target.checked; persist(); };
   card.querySelector('[data-a=test]').onclick = async () => {
-    msg.textContent = (await testNotification()) ? 'Testnotis kommer om 5 sekunder.' : 'Notiser fungerar bara i appen och kräver tillstånd.';
+    msg.textContent = (await testNotification(s)) ? 'Testnotis kommer om 5 sekunder.' : 'Notiser fungerar bara i appen och kräver tillstånd.';
   };
   card.querySelector('[data-a=exact]').onclick = async () => { await openExactAlarmSettings(); await persist(); };
   app.append(card);
