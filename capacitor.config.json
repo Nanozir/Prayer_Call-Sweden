@@ -1,0 +1,11 @@
+{
+  "appId": "se.salahkalender.app",
+  "appName": "Salah-kalender",
+  "webDir": "dist",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_salah",
+      "iconColor": "#0f5132"
+    }
+  }
+}
