@@ -9,17 +9,26 @@ set -euo pipefail
 
 URL="https://commons.wikimedia.org/wiki/Special:FilePath/Beautiful_adhan.ogg"
 UA="Salah-kalender/1.0 (https://github.com/Nanozir/Prayer_Call-Sweden)"
+FFMPEG="${FFMPEG:-ffmpeg}"
 tmp="$(mktemp -d)"
 
 curl -fsSL -A "$UA" -o "$tmp/original.ogg" "$URL"
 sha1="$(sha1sum "$tmp/original.ogg" | cut -d' ' -f1)"
 echo "Original SHA-1: $sha1"
 
-ffmpeg -hide_banner -loglevel error -y -i "$tmp/original.ogg" -ac 1 -ar 44100 \
-  -af "silenceremove=start_periods=1:start_threshold=-40dB,atrim=0:15,asetpts=N/SR/TB,afade=t=out:st=13:d=2,loudnorm=I=-26:TP=-12:LRA=11" \
+"$FFMPEG" -hide_banner -loglevel error -y -i "$tmp/original.ogg" -ac 1 \
+  -af "silenceremove=start_periods=1:start_threshold=-40dB,atrim=0:15,asetpts=N/SR/TB,afade=t=out:st=13:d=2,loudnorm=I=-27:TP=-9:LRA=11,volume=-3dB,aresample=44100" \
   -c:a libvorbis -q:a 4 "$tmp/salah_adhan.ogg"
 
-mkdir -p android/app/src/main/res/raw public/sounds
+# Sanity check: about 15 s long and actually audible.
+stats="$("$FFMPEG" -hide_banner -i "$tmp/salah_adhan.ogg" -af volumedetect -f null - 2>&1)"
+echo "$stats" | grep -E "Duration|mean_volume|max_volume"
+duration="$(echo "$stats" | sed -n 's/.*Duration: 00:00:\([0-9]*\).*/\1/p' | head -1)"
+mean="$(echo "$stats" | sed -n 's/.*mean_volume: \(-*[0-9.]*\) dB.*/\1/p')"
+[ "${duration:-0}" -ge 14 ] || { echo "Ljudet blev för kort (${duration}s)"; exit 1; }
+awk -v m="$mean" 'BEGIN { exit !(m > -45) }' || { echo "Ljudet är nästan tyst (${mean} dB)"; exit 1; }
+
+mkdir -p android/app/src/main/res/raw public/sounds assets-src
 cp "$tmp/salah_adhan.ogg" android/app/src/main/res/raw/salah_adhan.ogg
 cp "$tmp/salah_adhan.ogg" public/sounds/salah_adhan.ogg
 
@@ -31,6 +40,5 @@ cat > assets-src/ADHAN-SOURCE.md <<NOTE
 - Licens: CC0 1.0 Universal – fri att använda och ändra
 - Originalets SHA-1: \`$sha1\`
 - Bearbetning (scripts/fetch-adhan.sh): tystnad i början borttagen, första 15 s,
-  2 s uttoning, låg ljudnivå (-26 LUFS, topp -12 dB), mono Ogg Vorbis.
+  2 s uttoning, låg ljudnivå (ca -30 LUFS), mono Ogg Vorbis.
 NOTE
-ffprobe -hide_banner -show_entries format=duration -of csv=p=0 public/sounds/salah_adhan.ogg
