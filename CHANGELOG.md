@@ -20,7 +20,7 @@ Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 
 ### Versionshantering
 - Ett versionsnummer (i `package.json`) styr appen, Android-versionen och GitHub-releasen.
-- Releaser skapas bara från versionstaggar (`v1.1.0`), med APK och ändringslogg.
+- En release (`v1.1.0` osv.) skapas automatiskt när versionen höjs, med APK och ändringslogg.
 
 ## [1.0.0] – 2026-10-08
 

@@ -36,12 +36,14 @@ STOR·10000 + MINDRE·100 + FIX) sitt nummer.
 
 Så släpps en ny version:
 
-1. Skriv vad som ändrats under en ny rubrik `## [X.Y.Z]` i `CHANGELOG.md` och committa.
-2. `npm version patch` (buggfix), `npm version minor` (ny funktion) eller `npm version major`
-   – uppdaterar `package.json`, committar och skapar taggen `vX.Y.Z`.
-3. `git push --follow-tags` – GitHub bygger APK:n och publicerar releasen med ändringsloggen.
+1. Höj `version` i `package.json` (`npm version patch|minor|major --no-git-tag-version`:
+   patch = buggfix, minor = ny funktion, major = stor förändring).
+2. Skriv vad som ändrats under en ny rubrik `## [X.Y.Z]` i `CHANGELOG.md`.
+3. Committa och pusha. GitHub bygger APK:n och, eftersom versionen är ny, skapar taggen
+   `vX.Y.Z` och publicerar releasen med ändringsloggen. Saknas rubriken i ändringsloggen
+   stoppas bygget.
 
-Vanliga pushar bygger och testar bara (APK finns som artefakt under Actions).
+Pushar utan ny version bygger och testar bara (APK finns som artefakt under Actions).
 
 ## Utveckling
 
