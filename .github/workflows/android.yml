@@ -82,6 +82,14 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon
 
+      - name: Kontrollera att OCR-filerna finns i APK:n
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          unzip -l "$apk" | grep 'assets/public/tesseract/' || true
+          for f in worker.min.js lang/eng.traineddata.bin core/tesseract-core-simd-lstm.wasm.js core/tesseract-core-lstm.wasm.js; do
+            unzip -l "$apk" "assets/public/tesseract/$f" >/dev/null || { echo "::error::$f saknas i APK:n"; exit 1; }
+          done
+
       - name: Döp om APK
         run: |
           apk="Salah-kalender-v${{ steps.version.outputs.version }}.apk"

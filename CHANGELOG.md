@@ -3,6 +3,13 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.1.2] – 2026-10-08
+
+### Rättat
+- "Kunde inte läsa lang/eng.traineddata.gz (HTTP 404)": språkdatan för textigenkänningen
+  försvann ur Android-appen eftersom Androids byggverktyg hanterar filer som slutar på `.gz`
+  speciellt. Filen heter nu `.bin`, och bygget kontrollerar att alla OCR-filer finns i APK:n.
+
 ## [1.1.1] – 2026-10-08
 
 ### Säkerhet
