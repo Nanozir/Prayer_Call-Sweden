@@ -13,6 +13,12 @@ import { validateSchedule, rowProblems } from './ocr/correct.js';
 const app = document.getElementById('app');
 const state = { view: 'home', schedules: {}, settings: null, notifyResult: null, perms: null, draft: null };
 
+const ICON = {
+  bellOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>',
+  bellOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6.17V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66a6.9 6.9 0 0 0-2.38 1.04ZM3.4 2.6 2 4l3.13 3.13A7 7 0 0 0 5 11v5l-2 2v1h14.17l2.83 2.83 1.4-1.4Z"/></svg>',
+  image: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5Z"/></svg>',
+};
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
@@ -102,51 +108,71 @@ function renderHome() {
 
   if (row) {
     const next = nextPrayer(state.schedules, today);
-    const card = h(`<section class="card">
-      <h2>${wd} ${today.day} ${MONTHS_SV[today.month - 1]}</h2>
-      ${next ? `<div class="muted">Nästa: ${next.prayer.name}</div>
-        <div class="big">${fmt(next.minutes)}</div>
-        <div class="muted">om ${countdown(next.minutes - today.minutes)}</div>` : '<div class="muted">Dagens böner är passerade.</div>'}
-      <table class="times"><tbody></tbody></table>
-    </section>`);
-    const tbody = card.querySelector('tbody');
+    const prev = next ? (next.index > 0 ? row[next.index - 1] : null) : null;
+    const pct = next && prev != null ? Math.min(100, Math.max(0, ((today.minutes - prev) / (next.minutes - prev)) * 100)) : 0;
+    app.append(h(`<section class="hero">
+      <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}</div>
+      ${next ? `<div class="hero-label">Nästa bön</div>
+        <div class="hero-main"><span class="hero-name">${next.prayer.name}</span><span class="hero-time">${fmt(next.minutes)}</span></div>
+        <div class="hero-count">om ${countdown(next.minutes - today.minutes)}</div>
+        ${prev != null ? `<div class="hero-bar"><span style="width:${pct.toFixed(0)}%"></span></div>` : ''}`
+    : '<div class="hero-main"><span class="hero-name">Dagens böner är klara</span></div>'}
+    </section>`));
+
+    const list = h('<section class="card prayers-today"></section>');
     PRAYERS.forEach((p, i) => {
-      const cls = [next?.index === i ? 'next' : row[i] <= today.minutes ? 'past' : '', state.settings.enabled[p.key] ? '' : 'off'].join(' ');
-      tbody.append(h(`<table><tr class="${cls}"><td>${p.name}</td><td>${fmt(row[i])}</td></tr></table>`).querySelector('tr'));
+      const on = state.settings.enabled[p.key];
+      const cls = next?.index === i ? 'next' : row[i] <= today.minutes ? 'past' : '';
+      const item = h(`<div class="prayer ${cls}">
+        <span class="p-name">${p.name}${p.key === 'shuruk' ? '<small>soluppgång</small>' : ''}</span>
+        <span class="p-time">${fmt(row[i])}</span>
+        <button class="bell ${on ? 'on' : ''}" aria-label="${on ? 'Stäng av' : 'Slå på'} notis för ${p.name}">${on ? ICON.bellOn : ICON.bellOff}</button>
+      </div>`);
+      item.querySelector('.bell').onclick = async () => {
+        state.settings.enabled[p.key] = !on;
+        await saveSettings(state.settings);
+        render();
+        await refreshNotifications();
+        render();
+      };
+      list.append(item);
     });
-    app.append(card);
+    app.append(list);
   }
 
   const n = state.notifyResult;
   if (n?.native && !n.denied && !n.error) {
-    app.append(h(`<p class="muted">${n.scheduled
-      ? `${n.scheduled} notiser schemalagda, sista ${n.until.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })}.`
+    app.append(h(`<p class="muted center">${n.scheduled
+      ? `${n.scheduled} notiser schemalagda, till och med ${n.until.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })}.`
       : 'Inga kommande notiser schemalagda.'}</p>`));
   }
+}
 
+function renderScheduleList() {
+  const today = nowInStockholm();
   const list = Object.entries(state.schedules).sort(([a], [b]) => (a < b ? 1 : -1));
-  if (list.length) {
-    const card = h('<section class="card"><h2>Inlagda scheman</h2><ul class="list"></ul></section>');
-    const ul = card.querySelector('ul');
-    const labels = { current: 'Gäller nu', upcoming: 'Kommande', expired: 'Utgånget' };
-    for (const [key, s] of list) {
-      const st = scheduleStatus(s, today);
-      const li = h(`<li><span>${monthLabel(s.year, s.month)}<br><span class="badge ${st}">${labels[st]}</span></span>
-        <span class="row"><button class="secondary" data-a="edit">Visa</button><button class="danger" data-a="del">Ta bort</button></span></li>`);
-      li.querySelector('[data-a=edit]').onclick = () => {
-        state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true };
-        show('import');
-      };
-      li.querySelector('[data-a=del]').onclick = async () => {
-        if (!confirm(`Ta bort schemat för ${monthLabel(s.year, s.month)}? Dess notiser tas också bort.`)) return;
-        state.schedules = await deleteSchedule(key);
-        await refreshNotifications();
-        render();
-      };
-      ul.append(li);
-    }
-    app.append(card);
+  if (!list.length) return;
+  const card = h('<section class="card"><h2>Inlagda scheman</h2><ul class="list"></ul></section>');
+  const ul = card.querySelector('ul');
+  const labels = { current: 'Gäller nu', upcoming: 'Kommande', expired: 'Utgånget' };
+  for (const [key, s] of list) {
+    const st = scheduleStatus(s, today);
+    const li = h(`<li><span class="sched-name">${monthLabel(s.year, s.month)}<span class="badge ${st}">${labels[st]}</span></span>
+      <span class="row"><button class="secondary small" data-a="edit">Visa</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
+    li.querySelector('[data-a=edit]').onclick = () => {
+      state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true };
+      render();
+      window.scrollTo(0, 0);
+    };
+    li.querySelector('[data-a=del]').onclick = async () => {
+      if (!confirm(`Ta bort schemat för ${monthLabel(s.year, s.month)}? Dess notiser tas också bort.`)) return;
+      state.schedules = await deleteSchedule(key);
+      await refreshNotifications();
+      render();
+    };
+    ul.append(li);
   }
+  app.append(card);
 }
 
 function countdown(min) {
@@ -161,36 +187,54 @@ function renderImport() {
 
   const card = h(`<section class="card">
     <h2>Lägg till månadsschema</h2>
-    <p class="muted">Välj en bild eller skärmdump av moskéns schema. Appen läser av tiderna – du får granska dem innan de sparas.</p>
-    <label class="file-pick"><input type="file" accept="image/*" />📷 Välj bild</label>
-    <div class="progress" hidden><progress max="1" value="0"></progress><p class="muted msg"></p></div>
-    <p class="muted" style="margin-top:16px">Tips: en rak, skarp bild där hela tabellen syns ger bäst resultat.</p>
+    <p class="muted">Välj en bild eller skärmdump av moskéns schema. Tiderna läses av direkt i telefonen och du får granska dem innan de sparas.</p>
+    <label class="file-pick"><input type="file" accept="image/*" />${ICON.image}<span>Välj bild</span></label>
+    <div class="progress-box" hidden>
+      <img class="thumb" alt="" />
+      <div class="progress-info">
+        <div class="msg">Förbereder…</div>
+        <div class="bar"><span></span></div>
+        <div class="muted pct"></div>
+      </div>
+    </div>
+    <div class="error"></div>
+    <p class="muted small-text">Tips: en rak, skarp bild där hela tabellen syns ger bäst resultat.</p>
     <button class="secondary" data-a="manual">Skriv in manuellt istället</button>
   </section>`);
   const input = card.querySelector('input');
-  const prog = card.querySelector('.progress');
+  const box = card.querySelector('.progress-box');
+  const pick = card.querySelector('.file-pick');
+  const errEl = card.querySelector('.error');
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
-    prog.hidden = false;
-    card.querySelector('.file-pick').hidden = true;
+    const imageUrl = URL.createObjectURL(file);
+    box.querySelector('.thumb').src = imageUrl;
+    box.hidden = false;
+    pick.hidden = true;
+    errEl.replaceChildren();
     try {
       const { readSchedule } = await import('./ocr/recognize.js');
       const res = await readSchedule(file, (f, msg) => {
-        prog.querySelector('progress').value = f;
-        prog.querySelector('.msg').textContent = msg;
+        box.querySelector('.bar span').style.width = `${Math.round(f * 100)}%`;
+        box.querySelector('.pct').textContent = `${Math.round(f * 100)} %`;
+        box.querySelector('.msg').textContent = msg;
       });
       const now = nowInStockholm();
       state.draft = {
         year: res.year ?? now.year, month: res.month ?? now.month,
         monthDetected: res.year != null && res.month != null,
-        days: res.days, flags: res.flags, image: URL.createObjectURL(file),
+        days: res.days, flags: res.flags, image: imageUrl,
       };
       fitDraftToMonth();
       render();
+      window.scrollTo(0, 0);
     } catch (e) {
-      prog.querySelector('.msg').textContent = `Kunde inte läsa bilden: ${e.message ?? e}`;
-      card.querySelector('.file-pick').hidden = false;
+      console.error(e);
+      errEl.replaceChildren(h(`<div class="banner bad">Kunde inte läsa bilden: ${esc(e.message ?? e)}<br>Försök igen, eller skriv in tiderna manuellt.</div>`));
+      box.hidden = true;
+      pick.hidden = false;
+      input.value = '';
     }
   };
   card.querySelector('[data-a=manual]').onclick = () => {
@@ -200,6 +244,7 @@ function renderImport() {
     render();
   };
   app.append(card);
+  renderScheduleList();
 }
 
 // Pads/trims the draft so it has exactly one row per day of the chosen month.
@@ -305,6 +350,7 @@ function renderReview() {
     state.draft = null;
     await refreshNotifications();
     show('home');
+    window.scrollTo(0, 0);
   };
   app.append(card);
 }
@@ -333,7 +379,8 @@ function renderSettings() {
     (så du aldrig får fel tider) – istället får du en påminnelse om att lägga in nästa månad.<br><br>
     Vissa telefoner (t.ex. OnePlus, Oppo, Xiaomi, Samsung) stänger av appar i bakgrunden för att spara batteri.
     Om notiser uteblir: ställ in batterioptimering för Salah-kalender till <b>Obegränsad / Tillåt</b>.
-  </p></section></div>`);
+  </p></section>
+  <p class="muted center">Salah-kalender version ${__APP_VERSION__}</p></div>`);
   const box = card.querySelector('.prayers');
   PRAYERS.forEach((p) => {
     const t = h(`<label class="toggle"><span>${p.name}${p.key === 'shuruk' ? ' <span class="muted">(soluppgång)</span>' : ''}</span><input type="checkbox" ${s.enabled[p.key] ? 'checked' : ''}/></label>`);

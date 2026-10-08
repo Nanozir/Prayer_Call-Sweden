@@ -7,7 +7,10 @@ import { extname, join } from 'node:path';
 
 const fx = JSON.parse(await readFile('tests/fixtures/karlstad-oktober-2026.json', 'utf8'));
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.gz': 'application/gzip', '.wasm': 'application/wasm' };
+const hits = {};
 const server = createServer(async (req, res) => {
+  const p = req.url.split('?')[0];
+  hits[p] = (hits[p] ?? 0) + 1;
   const path = join('dist', decodeURIComponent(req.url.split('?')[0]).replace(/\/$/, '/index.html'));
   let body;
   try { body = await readFile(path); } catch { res.writeHead(404); return res.end(); }
@@ -42,9 +45,18 @@ console.log(`month=${month} year=${year} rows=${values.length} wrong=${wrong} fl
 
 await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/review.png` : 'review.png', fullPage: false });
 await page.click('[data-a=save]');
-await page.waitForSelector('.times');
+await page.waitForSelector('.hero');
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/home.png`, fullPage: true });
 await browser.close();
 server.close();
+
+// On Android, requests made from inside the OCR web worker can hang forever, so
+// every OCR asset must be loaded exactly once, by the main thread.
+const ocrHits = Object.entries(hits).filter(([p]) => p.includes('/tesseract/'));
+console.log('OCR asset requests:', JSON.stringify(Object.fromEntries(ocrHits)));
+if (ocrHits.length !== 3 || ocrHits.some(([, n]) => n !== 1)) {
+  console.log('FAIL: OCR assets must be fetched once each, by the main thread only');
+  process.exit(1);
+}
 if (wrong || month !== '10' || year !== '2026' || values.length !== 31) process.exit(1);
 console.log('E2E OK');

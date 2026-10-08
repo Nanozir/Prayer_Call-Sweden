@@ -1,8 +1,11 @@
 name: Bygg Android-app
 
+# Every push builds and tests the app (APK available under the run's artifacts).
+# Pushing a version tag (v1.2.3) additionally publishes a GitHub Release.
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -27,6 +30,19 @@ jobs:
       - name: Installera beroenden
         run: npm ci
 
+      - name: Läs version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Kontrollera att taggen matchar package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${GITHUB_REF_NAME#v}" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::Taggen $GITHUB_REF_NAME matchar inte package.json (${{ steps.version.outputs.version }})"
+            exit 1
+          fi
+          node scripts/release-notes.mjs "${{ steps.version.outputs.version }}" > release-notes.md
+
       - name: Enhetstester
         run: npm test
 
@@ -38,22 +54,21 @@ jobs:
 
       - name: Bygg APK
         working-directory: android
-        env:
-          VERSION_CODE: ${{ github.run_number }}
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Döp om APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk Salah-kalender.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk "Salah-kalender-v${{ steps.version.outputs.version }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Salah-kalender-apk
-          path: Salah-kalender.apk
+          name: Salah-kalender-v${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: Salah-kalender-v*.apk
 
-      - name: Publicera som release (för enkel nedladdning på telefonen)
+      - name: Publicera release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Salah-kalender (bygge ${{ github.run_number }})
-          prerelease: ${{ github.ref_name != 'main' }}
-          files: Salah-kalender.apk
+          name: Salah-kalender v${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          files: Salah-kalender-v*.apk
+          make_latest: true

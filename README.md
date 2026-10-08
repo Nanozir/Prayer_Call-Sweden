@@ -21,12 +21,27 @@ Android-app som gör Karlstads moskés månadsscheman för bönetider till notis
 
 ## Installera
 
-Varje push bygger en APK via GitHub Actions (fliken **Actions**, och under **Releases**).
-Ladda ner `Salah-kalender.apk` på telefonen och öppna den (tillåt "installera okända appar").
-Nya versioner installeras ovanpå den gamla, inlagda scheman behålls.
+Ladda ner senaste `Salah-kalender-vX.Y.Z.apk` under **Releases** på telefonen och öppna den
+(tillåt "installera okända appar"). Nya versioner installeras ovanpå den gamla, inlagda
+scheman behålls. Vad som ändrats står i [CHANGELOG.md](CHANGELOG.md).
 
 Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, och tillåt
 "Alarm och påminnelser" (exakta alarm) om appen ber om det.
+
+## Versioner och releaser
+
+Versionsnumret finns på ett ställe: `version` i `package.json`. Därifrån hämtar appen
+(visas under Inställningar) och Android-bygget (`versionName`, och `versionCode` =
+STOR·10000 + MINDRE·100 + FIX) sitt nummer.
+
+Så släpps en ny version:
+
+1. Skriv vad som ändrats under en ny rubrik `## [X.Y.Z]` i `CHANGELOG.md` och committa.
+2. `npm version patch` (buggfix), `npm version minor` (ny funktion) eller `npm version major`
+   – uppdaterar `package.json`, committar och skapar taggen `vX.Y.Z`.
+3. `git push --follow-tags` – GitHub bygger APK:n och publicerar releasen med ändringsloggen.
+
+Vanliga pushar bygger och testar bara (APK finns som artefakt under Actions).
 
 ## Utveckling
 
