@@ -80,6 +80,7 @@ Pushar utan ny version bygger och testar bara (APK finns som artefakt under Acti
 npm install
 npm test            # enhetstester (rättningslogik, tidszoner)
 npm run test:ocr    # läser in exempelbilden i Chromium och jämför alla 186 tider
+npm run sounds      # genererar om notisljuden (lågmälda klocktoner)
 npm run build && npx cap sync android   # öppna sedan android/ i Android Studio
 ```
 

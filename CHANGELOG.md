@@ -3,6 +3,19 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.2.0] – 2026-10-08
+
+### Nytt
+- **Notis vid själva bönetiden kommer alltid.** Väljer man en extra påminnelse (t.ex. 10 min
+  innan) kommer den som en egen notis märkt "Påminnelse: … om 10 min – inte bönetid än", och
+  sedan en separat notis "Det är dags för …" när tiden är inne.
+- **Ljud för notiser:** välj klockspel (ca 5 s), kort ljud (ca 2 s) eller inget ljud (bara
+  vibration). Påminnelser innan bön har alltid det korta ljudet. Ljuden är lågmälda från
+  början och kan provlyssnas under Inställningar. Testnotisen använder valt ljud.
+
+### Ändrat
+- "till och med"-datumet på startsidan räknar bara bönenotiser, inte schemapåminnelser.
+
 ## [1.1.2] – 2026-10-08
 
 ### Rättat
