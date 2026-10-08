@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- Only the app's own bundled files may load; no remote scripts, frames or requests.
+       'unsafe-inline' script is required because Capacitor injects its bridge inline. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'" />
   <meta name="theme-color" content="#0f5132" />
   <title>Salah-kalender</title>
   <link rel="stylesheet" href="/src/style.css" />
@@ -14,9 +17,18 @@
   </header>
   <main id="app"></main>
   <nav class="tabs">
-    <button data-view="home" class="active">Idag</button>
-    <button data-view="import">Lägg till schema</button>
-    <button data-view="settings">Inställningar</button>
+    <button data-view="home" class="active">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0-5 1.5 3h-3Zm0 20-1.5-3h3ZM2 12l3-1.5v3Zm20 0-3 1.5v-3ZM4.9 4.9l3.2 1.1-2.1 2.1Zm14.2 14.2-3.2-1.1 2.1-2.1Zm0-14.2-1.1 3.2-2.1-2.1ZM4.9 19.1 6 15.9l2.1 2.1Z"/></svg>
+      <span>Idag</span>
+    </button>
+    <button data-view="import">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V9h14Zm-8-9h2v3h3v2h-3v3h-2v-3H8v-2h3Z"/></svg>
+      <span>Scheman</span>
+    </button>
+    <button data-view="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.3 7.3 0 0 0-1.7-1L15 3h-4l-.4 2.7a7.3 7.3 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.3 7.3 0 0 0 1.7 1L11 21h4l.4-2.7a7.3 7.3 0 0 0 1.7-1l2.5 1 2-3.5ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
+      <span>Inställningar</span>
+    </button>
   </nav>
   <script type="module" src="/src/main.js"></script>
 </body>

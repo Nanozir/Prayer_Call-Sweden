@@ -7,5 +7,12 @@
       "smallIcon": "ic_stat_salah",
       "iconColor": "#0f5132"
     }
+  },
+  "android": {
+    "webContentsDebuggingEnabled": false,
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
   }
 }
