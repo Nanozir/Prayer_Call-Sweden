@@ -7,17 +7,99 @@ import { correctTable, detectMonthYear, digitsOf } from './correct.js';
 
 const MAX_SIDE = 2400;
 
+const INIT_TIMEOUT_MS = 120_000;
+const STATUS_SV = {
+  'loading tesseract core': 'Laddar textigenkänningen…',
+  'initializing tesseract': 'Startar textigenkänningen…',
+  'loading language traineddata': 'Laddar språkdata…',
+  'initializing api': 'Gör klart…',
+};
+
 function assetUrl(path) {
   return new URL(`tesseract/${path}`, document.baseURI).href;
 }
 
-async function newWorker() {
-  return createWorker('eng', 1, {
-    workerPath: assetUrl('worker.min.js'),
-    corePath: assetUrl('core'),
-    langPath: assetUrl('lang'),
+async function fetchAsset(path, as) {
+  let resp;
+  try {
+    resp = await fetch(assetUrl(path));
+  } catch (e) {
+    throw new Error(`kunde inte läsa ${path} (${e.message ?? e})`);
+  }
+  if (!resp.ok) throw new Error(`kunde inte läsa ${path} (HTTP ${resp.status})`);
+  return as === 'text' ? resp.text() : new Uint8Array(await resp.arrayBuffer());
+}
+
+// Same check as wasm-feature-detect's simd().
+function hasWasmSimd() {
+  try {
+    return WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3,
+      2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]));
+  } catch { return false; }
+}
+
+function toBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+let workerSourceUrl = null;
+
+// Builds one self-contained worker script: language data + wasm core + Tesseract
+// worker. Inside the Android app, network requests made *from* a web worker
+// are not reliably served from the app bundle and can hang forever, so the
+// worker must never fetch anything itself — the main thread does all loading.
+async function buildWorkerSource(onProgress) {
+  if (workerSourceUrl) return workerSourceUrl;
+  onProgress(0.03, 'Laddar textigenkänningen…');
+  const coreFile = hasWasmSimd() ? 'tesseract-core-simd-lstm.wasm.js' : 'tesseract-core-lstm.wasm.js';
+  const [lang, core, worker] = await Promise.all([
+    fetchAsset('lang/eng.traineddata.gz'),
+    fetchAsset(`core/${coreFile}`, 'text'),
+    fetchAsset('worker.min.js', 'text'),
+  ]);
+  const preamble = `
+    const __lang = Uint8Array.from(atob("${toBase64(lang)}"), (c) => c.charCodeAt(0));
+    const __fetch = self.fetch ? self.fetch.bind(self) : null;
+    self.fetch = (url, ...rest) => (String(url).endsWith('eng.traineddata.gz')
+      ? Promise.resolve(new Response(__lang))
+      : __fetch(url, ...rest));
+  `;
+  workerSourceUrl = URL.createObjectURL(new Blob(
+    [preamble, '\n', core, '\n;\n', worker],
+    { type: 'application/javascript' },
+  ));
+  return workerSourceUrl;
+}
+
+async function newWorker(onProgress) {
+  const workerPath = await buildWorkerSource(onProgress);
+  let lastStatus = 'start';
+  const workerPromise = createWorker('eng', 1, {
+    workerPath,
+    workerBlobURL: false,
+    langPath: 'bundled',
+    cacheMethod: 'none',
     gzip: true,
+    logger: (m) => {
+      if (m.workerId == null && !m.status) return;
+      lastStatus = m.status;
+      if (STATUS_SV[m.status]) onProgress(0.05, STATUS_SV[m.status]);
+    },
+    errorHandler: (e) => console.error('tesseract', e),
   });
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(
+      `textigenkänningen startade inte inom ${INIT_TIMEOUT_MS / 1000} s (steg: ${lastStatus}).`,
+    )), INIT_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([workerPromise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function loadImage(file) {
@@ -84,8 +166,7 @@ export async function readSchedule(file, onProgress = () => {}) {
   const gray = toGray(canvas);
   const grid = detectGrid(gray, canvas.width, canvas.height);
 
-  onProgress(0.05, 'Startar textigenkänning…');
-  const worker = await newWorker();
+  const worker = await newWorker(onProgress);
   try {
     // Header text above the table (month + year).
     const headerBottom = grid ? grid.rows[0] : Math.round(canvas.height * 0.35);
