@@ -22,6 +22,8 @@ const url = `http://localhost:${server.address().port}/`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const page = await browser.newPage({ viewport: { width: 400, height: 860 } });
 page.on('pageerror', (e) => console.error('pageerror', e));
+const cspViolations = [];
+page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text()); });
 await page.addInitScript(() => {
   // Freeze "today" at 8 Oct 2026 08:13 Stockholm time.
   const fixed = new Date('2026-10-08T06:13:00Z').getTime();
@@ -56,6 +58,10 @@ const ocrHits = Object.entries(hits).filter(([p]) => p.includes('/tesseract/'));
 console.log('OCR asset requests:', JSON.stringify(Object.fromEntries(ocrHits)));
 if (ocrHits.length !== 3 || ocrHits.some(([, n]) => n !== 1)) {
   console.log('FAIL: OCR assets must be fetched once each, by the main thread only');
+  process.exit(1);
+}
+if (cspViolations.length) {
+  console.log('FAIL: Content-Security-Policy blocked something:\n' + cspViolations.join('\n'));
   process.exit(1);
 }
 if (wrong || month !== '10' || year !== '2026' || values.length !== 31) process.exit(1);

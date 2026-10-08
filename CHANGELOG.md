@@ -3,6 +3,17 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.1.1] – 2026-10-08
+
+### Säkerhet
+- Strikt innehållspolicy (CSP): appen kan bara köra sina egna inbyggda filer – inga externa
+  skript, ramar eller nätverksanrop.
+- Okrypterad trafik (http) är avstängd och felsökning av appens webbvy är avstängd.
+- Signeringsnyckeln kan hämtas från GitHub Secrets i stället för repot.
+- Varje bygge kontrollerar beroenden mot kända säkerhetshål (`npm audit`), och Dependabot
+  föreslår säkerhetsuppdateringar varje vecka.
+- Releaser innehåller SHA-256-kontrollsumma och signeringscertifikatets fingeravtryck.
+
 ## [1.1.0] – 2026-10-08
 
 ### Rättat

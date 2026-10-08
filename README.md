@@ -28,6 +28,35 @@ scheman behålls. Vad som ändrats står i [CHANGELOG.md](CHANGELOG.md).
 Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, och tillåt
 "Alarm och påminnelser" (exakta alarm) om appen ber om det.
 
+## Säkerhet och integritet
+
+- **Ingen data lämnar telefonen.** Bilder läses av lokalt, scheman och inställningar sparas
+  bara i appen. Ingen inloggning, reklam, analys eller spårning.
+- **Behörigheter:** notiser, exakta alarm (för att notisen ska komma på minuten), start efter
+  omstart (för att återställa notiser) och INTERNET (krävs tekniskt av Androids webbvy – appen
+  anropar ingen server; en innehållspolicy blockerar alla externa anrop).
+- **Spårbara byggen:** varje APK byggs öppet i GitHub Actions från koden i repot, och
+  releasen anger APK:ns SHA-256 och signeringscertifikatets fingeravtryck.
+
+### Play Protect
+
+Appar som installeras utanför Play Butik kan få en varning ("okänd app") oavsett innehåll,
+eftersom Google inte känner till utvecklaren. Det går inte att stänga av inifrån appen –
+skanna gärna appen när Play Protect frågar. Helt utan varning blir det först om appen
+publiceras på Play Butik eller signeras av en Google-verifierad utvecklare.
+
+### Egen signeringsnyckel (rekommenderas)
+
+Byggen signeras med en reservnyckel som ligger i repot. För en hemlig nyckel:
+
+1. `keytool -genkeypair -keystore release.keystore -alias salah -keyalg RSA -keysize 4096 -validity 10000`
+2. Lägg till under *Settings → Secrets and variables → Actions*:
+   `SIGNING_KEYSTORE_BASE64` (`base64 -w0 release.keystore`), `SIGNING_STORE_PASSWORD`,
+   `SIGNING_KEY_ALIAS` (`salah`) och `SIGNING_KEY_PASSWORD`.
+3. Avinstallera appen en gång och installera nästa release (ny nyckel = ny app för Android;
+   inlagda scheman behöver läggas in igen). Spara nyckeln säkert – utan den kan appen inte
+   uppdateras.
+
 ## Versioner och releaser
 
 Versionsnumret finns på ett ställe: `version` i `package.json`. Därifrån hämtar appen

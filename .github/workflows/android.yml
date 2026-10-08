@@ -31,6 +31,9 @@ jobs:
       - name: Installera beroenden
         run: npm ci
 
+      - name: Säkerhetskontroll av beroenden
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Läs version
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
@@ -59,17 +62,47 @@ jobs:
       - name: Synka till Android
         run: npx cap sync android
 
+      - name: Hämta signeringsnyckel
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "Signerar med nyckeln från GitHub Secrets."
+          else
+            echo "::warning::Inga signeringssecrets – signerar med reservnyckeln i repot."
+          fi
+
       - name: Bygg APK
         working-directory: android
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Döp om APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "Salah-kalender-v${{ steps.version.outputs.version }}.apk"
+        run: |
+          apk="Salah-kalender-v${{ steps.version.outputs.version }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          # Print the signing certificate so anyone can verify who signed the APK.
+          "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs "$apk" | tee signing-cert.txt
+          if [ -f release-notes.md ]; then
+            {
+              echo; echo "### Verifiering"
+              echo "- APK SHA-256: \`$(cut -d' ' -f1 "$apk.sha256")\`"
+              echo "- Signeringscertifikat SHA-256: \`$(grep -m1 'SHA-256' signing-cert.txt | awk '{print $NF}')\`"
+            } >> release-notes.md
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: Salah-kalender-v${{ steps.version.outputs.version }}-${{ github.sha }}
-          path: Salah-kalender-v*.apk
+          path: |
+            Salah-kalender-v*.apk
+            Salah-kalender-v*.apk.sha256
 
       - name: Publicera release
         if: steps.release.outputs.publish == 'true'
@@ -79,5 +112,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Salah-kalender v${{ steps.version.outputs.version }}
           body_path: release-notes.md
-          files: Salah-kalender-v*.apk
+          files: |
+            Salah-kalender-v*.apk
+            Salah-kalender-v*.apk.sha256
           make_latest: true
