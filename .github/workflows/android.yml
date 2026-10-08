@@ -97,7 +97,7 @@ jobs:
             } >> release-notes.md
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Salah-kalender-v${{ steps.version.outputs.version }}-${{ github.sha }}
           path: |
