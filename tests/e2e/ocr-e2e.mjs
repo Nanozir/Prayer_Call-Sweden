@@ -64,6 +64,30 @@ if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}
 await page.click('[data-a=save]');
 await page.waitForSelector('.hero');
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/home.png`, fullPage: true });
+
+// Day browsing: swipe (synthetic touch) and arrows, up to the end of the schedule.
+const swipe = (dx) => page.evaluate((dx) => {
+  const el = document.getElementById('app');
+  const touch = (x) => new Touch({ identifier: 1, target: el, clientX: x, clientY: 300 });
+  el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(200)], bubbles: true }));
+  el.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(200 + dx)], bubbles: true }));
+}, dx);
+await swipe(-120); // left = next day
+const tomorrow = await page.$eval('.nav-day', (e) => e.textContent);
+if (!/9 oktober/.test(tomorrow)) { console.log('FAIL: swipe did not go to the next day:', tomorrow); process.exit(1); }
+const fajr9 = await page.$eval('.prayer .p-time', (e) => e.textContent);
+if (fajr9 !== fx.truth[8][0]) { console.log('FAIL: wrong times for 9 Oct', fajr9); process.exit(1); }
+await swipe(120); // back to today
+if (await page.$eval('.nav-day', (e) => e.textContent) !== 'Idag') { console.log('FAIL: swipe back'); process.exit(1); }
+for (let i = 0; i < 24; i++) await page.click('.nav-arrow[data-dir="1"]');
+const end = await page.$eval('.no-schedule h2', (e) => e.textContent).catch(() => null);
+const nextDisabled = await page.$eval('.nav-arrow[data-dir="1"]', (b) => b.disabled);
+if (end !== 'Inget schema för november 2026' || !nextDisabled) { console.log('FAIL: end of schedule', end, nextDisabled); process.exit(1); }
+if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/no-schedule.png` });
+await page.click('.nav-arrow[data-dir="-1"]');
+if (!/31 oktober/.test(await page.$eval('.nav-day', (e) => e.textContent))) { console.log('FAIL: back into October'); process.exit(1); }
+if (process.env.SHOT_DIR) { await page.waitForTimeout(150); await page.screenshot({ path: `${process.env.SHOT_DIR}/month-anim.png` }); }
+console.log('Day browsing OK');
 await browser.close();
 server.close();
 

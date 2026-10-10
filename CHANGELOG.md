@@ -3,6 +3,15 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.5.0] – 2026-10-10
+
+### Nytt
+- **Bläddra mellan dagar på "Idag":** svep åt vänster/höger (eller tryck på pilarna) för att se
+  nästa/föregående dags bönetider. "Till idag" tar dig tillbaka.
+- Vid månadsskifte syns en tydligare animation med månadens namn, så man märker att man bytt
+  månad. Finns inget schema för nästa (eller förra) månad visas "Inget schema för …" med en
+  knapp för att lägga till det – längre än så går det inte att svepa.
+
 ## [1.4.0] – 2026-10-10
 
 ### Nytt

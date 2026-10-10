@@ -159,3 +159,37 @@ dialog.info p { margin: 0 0 10px; font-size: .95rem; }
 .warn-text { background: var(--warn-bg); color: var(--warn); padding: 10px; border-radius: 10px; }
 .est-badge { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 99px; background: #f3c56b; color: #3a2f14; font-size: .75rem; font-weight: 700; }
 .list li { flex-wrap: wrap; } .list li .row { flex-wrap: wrap; }
+
+/* ---- day browsing (v1.5) ---- */
+.day-nav { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; margin: 10px 0 4px; }
+.nav-arrow { width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 1.8rem; line-height: 1; background: var(--accent-soft); color: var(--accent); }
+.nav-arrow:disabled { opacity: .25; }
+.nav-label { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.nav-day { font-weight: 700; font-size: 1.05rem; }
+button.link { background: none; color: var(--accent); padding: 0; font-size: .85rem; text-decoration: underline; font-weight: 600; }
+.day-pane { position: relative; }
+.hero-other { background: linear-gradient(135deg, #24423a 0%, #2f5d50 100%); }
+.no-schedule { text-align: center; padding: 28px 18px; }
+.no-schedule-icon { font-size: 2.4rem; }
+.swipe-hint { font-size: .78rem; opacity: .7; }
+
+/* Day-to-day: quick sideways slide. Month change: bigger, slower move with a month chip. */
+.anim-day-next { animation: slideFromRight .22s ease-out; }
+.anim-day-prev { animation: slideFromLeft .22s ease-out; }
+.anim-fade { animation: fadeIn .25s ease-out; }
+.anim-month-next { animation: monthFromRight .5s cubic-bezier(.2,.8,.2,1); }
+.anim-month-prev { animation: monthFromLeft .5s cubic-bezier(.2,.8,.2,1); }
+.month-chip {
+  position: absolute; top: 40%; left: 50%; z-index: 2; transform: translate(-50%, -50%);
+  padding: 10px 22px; border-radius: 99px; background: var(--accent); color: #fff;
+  font-weight: 800; font-size: 1.2rem; text-transform: capitalize; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  pointer-events: none; animation: chip 1.1s ease-out forwards;
+}
+@keyframes slideFromRight { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slideFromLeft { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes monthFromRight { from { transform: translateX(100%) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes monthFromLeft { from { transform: translateX(-100%) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes chip { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.8); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .day-pane, .month-chip { animation: none !important; } }
+body { overflow-x: hidden; }
