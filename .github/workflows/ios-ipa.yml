@@ -1,0 +1,85 @@
+name: iOS-app till release (.ipa)
+
+# After the Android build on main has published (or found) the release for the
+# current version, build an unsigned iPhone app (.ipa) and attach it to that
+# release. Install it with SideStore/AltStore, which sign it with the user's
+# own free Apple ID (see README "iPhone"). Runs on macOS only when the release
+# still lacks its .ipa, since macOS minutes cost 10x on private repos.
+on:
+  workflow_run:
+    workflows: ['Bygg Android-app']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.need.outputs.build }}
+      version: ${{ steps.need.outputs.version }}
+      sha: ${{ steps.need.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: need
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          assets=$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || echo "NO_RELEASE")
+          if [ "$assets" = "NO_RELEASE" ]; then
+            echo "Ingen release v$version – hoppar över."; echo "build=false" >> "$GITHUB_OUTPUT"
+          elif grep -q '\.ipa$' <<< "$assets"; then
+            echo "v$version har redan en .ipa – hoppar över."; echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  ipa:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync ios
+      - name: Bygg för iPhone (osignerad)
+        run: |
+          version="${{ needs.check.outputs.version }}"
+          IFS=. read -r ma mi pa <<< "$version"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION=$((ma * 10000 + mi * 100 + pa)) \
+            build | tail -20
+      - name: Packa .ipa och ladda upp till releasen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ needs.check.outputs.version }}"
+          ipa="Salah-kalender-v$version.ipa"
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          test -f Payload/App.app/public/index.html
+          test -f Payload/App.app/public/tesseract/lang/eng.traineddata.bin
+          zip -qry "$ipa" Payload
+          shasum -a 256 "$ipa" > "$ipa.sha256"
+          ls -la "$ipa"
+          gh release upload "v$version" "$ipa" "$ipa.sha256" --repo "$GITHUB_REPOSITORY" --clobber

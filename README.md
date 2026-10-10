@@ -30,18 +30,31 @@ Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, 
 
 ## iPhone
 
-**Utan app (fungerar nu, gratis):** i Android-appen, under *Scheman*, finns knappen
-**📅 Kalender** vid varje månad. Den skapar en kalenderfil (.ics) med alla bönetider och
-påminnelser. Skicka den till iPhonen (Messages, WhatsApp, mejl), tryck på filen och välj
-**Lägg till alla**. Tiderna hamnar i iPhonens kalender med notiser och fungerar utan internet.
-Gör om det varje månad när moskén släppt nytt schema.
+En iPhone kan inte installera appfiler direkt från nätet som Android kan – Apple kräver att
+varje app är signerad för telefonen. Det finns tre vägar:
 
-**Som app (kräver Apple-konto):** iOS-projektet finns i `ios/` och byggs (osignerat) av flödet
-*Bygg iOS-app (kontroll)*. För att installera på en iPhone krävs
-[Apple Developer Program](https://developer.apple.com/programs/) (99 USD/år). Därefter kan
-appen läggas ut via TestFlight så att t.ex. en förälder installerar den med TestFlight-appen.
-Begränsningar på iOS: max 64 schemalagda notiser (appen fyller på när den öppnas, så öppna
-den minst en gång i veckan) och notiserna använder iPhonens standardljud.
+**1. Appen från GitHub via SideStore/AltStore (gratis).** Varje release innehåller även
+`Salah-kalender-vX.Y.Z.ipa` (iPhone-versionen, osignerad). Den installeras med
+[SideStore](https://sidestore.io) eller [AltStore](https://altstore.io), som signerar appen med
+ett eget, gratis Apple-ID:
+1. Installera SideStore eller AltStore på iPhonen (första gången behövs en dator, Windows eller
+   Mac – följ guiden på deras webbplats).
+2. Ladda ner `.ipa`-filen från Releases på iPhonen och öppna den med SideStore/AltStore.
+3. Godkänn utvecklaren under *Inställningar → Allmänt → VPN och enhetshantering*.
+
+Begränsningar med gratis Apple-ID: appen måste förnyas var 7:e dag (SideStore/AltStore gör det
+automatiskt i bakgrunden, men telefonen måste ibland vara på Wi-Fi), högst 3 sådana appar.
+Inlagda scheman finns kvar vid förnyelse och uppdatering.
+
+**2. Utan app – kalenderfil (gratis, enklast).** I appen under *Scheman* finns **📅 Kalender**
+vid varje månad. Skicka filen till iPhonen, öppna den och välj **Lägg till alla** – tiderna hamnar
+i kalendern med påminnelser. Görs om varje månad.
+
+**3. TestFlight (99 USD/år).** Med [Apple Developer Program](https://developer.apple.com/programs/)
+kan appen delas via TestFlight utan 7-dagarsgränsen.
+
+Gäller alla iPhone-varianter av appen: max 64 schemalagda notiser (appen fyller på när den
+öppnas – öppna den minst en gång i veckan) och notiserna använder iPhonens standardljud.
 
 ## Beräknade tider (nödläge)
 
