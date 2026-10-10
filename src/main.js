@@ -13,10 +13,11 @@ import {
 import { validateSchedule, rowProblems } from './ocr/correct.js';
 import { withEstimates } from './estimate.js';
 import { shareCalendar } from './share.js';
+import { addDays, sameDay, dayRow, step } from './daynav.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
-const state = { view: 'home', schedules: {}, settings: null, notifyResult: null, perms: null, draft: null };
+const state = { view: 'home', viewDate: null, anim: null, schedules: {}, settings: null, notifyResult: null, perms: null, draft: null };
 
 const ICON = {
   bellOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>',
@@ -34,6 +35,7 @@ document.querySelectorAll('.tabs button').forEach((b) => {
 });
 
 function show(view) {
+  if (view === 'home' && state.view !== 'home') state.viewDate = null;
   state.view = view;
   document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   render();
@@ -114,53 +116,143 @@ function renderBanners(target) {
 }
 
 function renderHome() {
-  renderBanners(app);
   const today = nowInStockholm();
   const shown = withEstimates(state.schedules, state.settings, today);
-  const estimated = !!shown[monthKey(today.year, today.month)]?.estimated;
-  const row = todaysTimes(shown, today);
-  const wd = WEEKDAYS_SV[weekday(today.year, today.month, today.day)];
+  const date = state.viewDate ?? today;
+  const isToday = sameDay(date, today);
+  if (isToday) renderBanners(app);
 
-  if (row) {
-    const next = nextPrayer(shown, today);
+  const wd = WEEKDAYS_SV[weekday(date.year, date.month, date.day)];
+  const prevStep = step(shown, date, -1);
+  const nextStep = step(shown, date, 1);
+  const nav = h(`<div class="day-nav">
+    <button class="nav-arrow" data-dir="-1" aria-label="Föregående dag" ${prevStep ? '' : 'disabled'}>‹</button>
+    <div class="nav-label">
+      <span class="nav-day">${isToday ? 'Idag' : `${wd} ${date.day} ${MONTHS_SV[date.month - 1]}`}</span>
+      ${isToday ? `<span class="muted">${wd} ${date.day} ${MONTHS_SV[date.month - 1]}</span>` : '<button class="link" data-a="today">Till idag</button>'}
+    </div>
+    <button class="nav-arrow" data-dir="1" aria-label="Nästa dag" ${nextStep ? '' : 'disabled'}>›</button>
+  </div>`);
+  nav.querySelectorAll('.nav-arrow').forEach((b) => { b.onclick = () => moveDay(+b.dataset.dir); });
+  nav.querySelector('[data-a=today]')?.addEventListener('click', () => {
+    const back = date.year * 10000 + date.month * 100 + date.day > today.year * 10000 + today.month * 100 + today.day;
+    state.anim = sameMonth(date, today) ? 'fade' : `month-${back ? 'prev' : 'next'}`;
+    state.viewDate = null;
+    render();
+  });
+  app.append(nav);
+
+  const pane = h('<div class="day-pane"></div>');
+  if (state.anim) {
+    pane.classList.add(`anim-${state.anim}`);
+    if (state.anim.startsWith('month')) pane.append(h(`<div class="month-chip">${monthLabel(date.year, date.month)}</div>`));
+    state.anim = null;
+  }
+  app.append(pane);
+
+  const row = dayRow(shown, date);
+  if (!row) {
+    const future = date.year * 12 + date.month > today.year * 12 + today.month;
+    const card = h(`<section class="card no-schedule">
+      <div class="no-schedule-icon">📅</div>
+      <h2>Inget schema för ${monthLabel(date.year, date.month)}</h2>
+      <p class="muted">${future
+        ? 'Schemat för nästa månad är inte inlagt än. Lägg in det när moskén har publicerat det.'
+        : 'Det finns inget sparat schema för den här månaden.'}</p>
+      ${future || isToday ? '<button data-a="import">Lägg till schema</button>' : ''}
+    </section>`);
+    card.querySelector('[data-a=import]')?.addEventListener('click', () => show('import'));
+    pane.append(card);
+    return;
+  }
+
+  const estimated = !!shown[monthKey(date.year, date.month)]?.estimated;
+  const badge = estimated ? ' <span class="est-badge">Beräknade tider</span>' : '';
+  const next = isToday ? nextPrayer(shown, today) : null;
+  if (isToday) {
     const prev = next ? (next.index > 0 ? row[next.index - 1] : null) : null;
     const pct = next && prev != null ? Math.min(100, Math.max(0, ((today.minutes - prev) / (next.minutes - prev)) * 100)) : 0;
-    app.append(h(`<section class="hero">
-      <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}${estimated ? ' <span class="est-badge">Beräknade tider</span>' : ''}</div>
+    pane.append(h(`<section class="hero">
+      <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}${badge}</div>
       ${next ? `<div class="hero-label">Nästa bön</div>
         <div class="hero-main"><span class="hero-name">${next.prayer.name}</span><span class="hero-time">${fmt(next.minutes)}</span></div>
         <div class="hero-count">om ${countdown(next.minutes - today.minutes)}</div>
         ${prev != null ? `<div class="hero-bar"><span style="width:${pct.toFixed(0)}%"></span></div>` : ''}`
     : '<div class="hero-main"><span class="hero-name">Dagens böner är klara</span></div>'}
     </section>`));
-
-    const list = h('<section class="card prayers-today"></section>');
-    PRAYERS.forEach((p, i) => {
-      const on = state.settings.enabled[p.key];
-      const cls = next?.index === i ? 'next' : row[i] <= today.minutes ? 'past' : '';
-      const item = h(`<div class="prayer ${cls}">
-        <span class="p-name">${p.name}${p.key === 'shuruk' ? '<small>soluppgång</small>' : ''}</span>
-        <span class="p-time">${fmt(row[i])}</span>
-        <button class="bell ${on ? 'on' : ''}" aria-label="${on ? 'Stäng av' : 'Slå på'} notis för ${p.name}">${on ? ICON.bellOn : ICON.bellOff}</button>
-      </div>`);
-      item.querySelector('.bell').onclick = async () => {
-        state.settings.enabled[p.key] = !on;
-        await saveSettings(state.settings);
-        render();
-        await refreshNotifications();
-        render();
-      };
-      list.append(item);
-    });
-    app.append(list);
+  } else {
+    const diff = Math.round((Date.UTC(date.year, date.month - 1, date.day) - Date.UTC(today.year, today.month - 1, today.day)) / 864e5);
+    const rel = diff === 1 ? 'Imorgon' : diff === -1 ? 'Igår' : diff > 0 ? `Om ${diff} dagar` : `För ${-diff} dagar sedan`;
+    pane.append(h(`<section class="hero hero-other">
+      <div class="hero-date">${rel}${badge}</div>
+      <div class="hero-main"><span class="hero-name">${wd} ${date.day} ${MONTHS_SV[date.month - 1]}</span></div>
+      <div class="hero-count">Fajr ${fmt(row[0])} · Maghrib ${fmt(row[4])}</div>
+    </section>`));
   }
 
+  const list = h('<section class="card prayers-today"></section>');
+  const past = date.year * 10000 + date.month * 100 + date.day < today.year * 10000 + today.month * 100 + today.day;
+  PRAYERS.forEach((p, i) => {
+    const on = state.settings.enabled[p.key];
+    const cls = next?.index === i ? 'next' : past || (isToday && row[i] <= today.minutes) ? 'past' : '';
+    const item = h(`<div class="prayer ${cls}">
+      <span class="p-name">${p.name}${p.key === 'shuruk' ? '<small>soluppgång</small>' : ''}</span>
+      <span class="p-time">${fmt(row[i])}</span>
+      <button class="bell ${on ? 'on' : ''}" aria-label="${on ? 'Stäng av' : 'Slå på'} notis för ${p.name}">${on ? ICON.bellOn : ICON.bellOff}</button>
+    </div>`);
+    item.querySelector('.bell').onclick = async () => {
+      state.settings.enabled[p.key] = !on;
+      await saveSettings(state.settings);
+      render();
+      await refreshNotifications();
+      render();
+    };
+    list.append(item);
+  });
+  pane.append(list);
+
   const n = state.notifyResult;
-  if (n?.native && !n.denied && !n.error) {
-    app.append(h(`<p class="muted center">${n.scheduled
+  if (isToday && n?.native && !n.denied && !n.error) {
+    pane.append(h(`<p class="muted center">${n.scheduled
       ? `${n.scheduled} notiser schemalagda, till och med ${n.until.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long' })}.`
       : 'Inga kommande notiser schemalagda.'}</p>`));
   }
+  if (isToday) pane.append(h('<p class="muted center swipe-hint">Svep åt sidan för att se andra dagar</p>'));
+}
+
+const sameMonth = (a, b) => a.year === b.year && a.month === b.month;
+
+function moveDay(dir) {
+  const today = nowInStockholm();
+  const shown = withEstimates(state.schedules, state.settings, today);
+  const r = step(shown, state.viewDate ?? today, dir);
+  if (!r) {
+    app.querySelector('.day-pane')?.animate(
+      [{ transform: 'translateX(0)' }, { transform: `translateX(${dir * -12}px)` }, { transform: 'translateX(0)' }],
+      { duration: 220 },
+    );
+    return;
+  }
+  state.viewDate = sameDay(r.to, today) ? null : r.to;
+  state.anim = `${r.kind}-${dir > 0 ? 'next' : 'prev'}`;
+  render();
+}
+
+// Horizontal swipe on the "Idag" tab changes day.
+function setupSwipe() {
+  let start = null;
+  app.addEventListener('touchstart', (e) => {
+    if (state.view !== 'home' || e.touches.length !== 1) { start = null; return; }
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  app.addEventListener('touchend', (e) => {
+    if (!start || state.view !== 'home') return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    const fast = Date.now() - start.t < 600;
+    start = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && fast) moveDay(dx < 0 ? 1 : -1);
+  }, { passive: true });
 }
 
 function renderScheduleList() {
@@ -526,6 +618,7 @@ function renderSettings() {
 // ---------------------------------------------------------------- startup
 
 async function init() {
+  setupSwipe();
   state.schedules = await loadSchedules();
   state.settings = await loadSettings();
   render();
