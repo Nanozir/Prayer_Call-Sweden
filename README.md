@@ -28,6 +28,30 @@ scheman behålls. Vad som ändrats står i [CHANGELOG.md](CHANGELOG.md).
 Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, och tillåt
 "Alarm och påminnelser" (exakta alarm) om appen ber om det.
 
+## iPhone
+
+**Utan app (fungerar nu, gratis):** i Android-appen, under *Scheman*, finns knappen
+**📅 Kalender** vid varje månad. Den skapar en kalenderfil (.ics) med alla bönetider och
+påminnelser. Skicka den till iPhonen (Messages, WhatsApp, mejl), tryck på filen och välj
+**Lägg till alla**. Tiderna hamnar i iPhonens kalender med notiser och fungerar utan internet.
+Gör om det varje månad när moskén släppt nytt schema.
+
+**Som app (kräver Apple-konto):** iOS-projektet finns i `ios/` och byggs (osignerat) av flödet
+*Bygg iOS-app (kontroll)*. För att installera på en iPhone krävs
+[Apple Developer Program](https://developer.apple.com/programs/) (99 USD/år). Därefter kan
+appen läggas ut via TestFlight så att t.ex. en förälder installerar den med TestFlight-appen.
+Begränsningar på iOS: max 64 schemalagda notiser (appen fyller på när den öppnas, så öppna
+den minst en gång i veckan) och notiserna använder iPhonens standardljud.
+
+## Beräknade tider (nödläge)
+
+Kan slås på under Inställningar. Saknas moskéns schema för innevarande eller nästa månad räknas
+tiderna fram (`src/estimate.js`): solens läge över Karlstad (NOAA-formler) med skymnings-/
+gryningsvinklar, Asr-skuggfaktor och minutjusteringar som anpassas så att de återger moskéns
+egna inlagda scheman (annars `src/data/karlstad-reference.json`). Finns samma månad från ett
+tidigare år används den, justerad för sommartid. Mot moskéns oktober 2026 är medelfelet under
+en minut; Fajr/Isha på sommaren är osäkrast.
+
 ## Säkerhet och integritet
 
 - **Ingen data lämnar telefonen.** Bilder läses av lokalt, scheman och inställningar sparas
@@ -88,7 +112,7 @@ npm install
 npm test            # enhetstester (rättningslogik, tidszoner)
 npm run test:ocr    # läser in exempelbilden i Chromium och jämför alla 186 tider
 npm run sounds      # genererar om notisljuden (lågmälda klocktoner)
-npm run build && npx cap sync android   # öppna sedan android/ i Android Studio
+npm run build && npx cap sync   # öppna sedan android/ i Android Studio eller ios/ i Xcode
 ```
 
 - `src/ocr/grid.js` – hittar tabellens linjer i bilden

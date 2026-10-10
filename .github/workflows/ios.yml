@@ -1,0 +1,33 @@
+name: Bygg iOS-app (kontroll)
+
+# Builds the iOS app for the simulator, without signing, to prove it compiles.
+# macOS minutes cost 10x on private repos, so this runs only when the iOS
+# project changes or when started manually (Actions → this workflow → Run).
+# Publishing to iPhones (TestFlight) needs an Apple Developer account – see README.
+on:
+  push:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync ios
+      - name: Bygg (simulator, osignerad)
+        run: |
+          version=$(node -p "require('./package.json').version")
+          IFS=. read -r ma mi pa <<< "$version"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION=$((ma * 10000 + mi * 100 + pa)) build | tail -40  # pipefail keeps errors

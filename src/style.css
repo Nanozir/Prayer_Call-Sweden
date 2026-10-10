@@ -142,3 +142,20 @@ input[type=checkbox] { accent-color: var(--accent); }
 .sound-row .muted { font-size: .8rem; }
 .toggle small { font-size: .78rem; }
 .sound-row button { white-space: nowrap; flex: none; }
+
+/* ---- time editor (v1.4) ---- */
+.review button.cell { width: 100%; min-width: 0; padding: 7px 0; border-radius: 6px; font: inherit; font-weight: 500; font-variant-numeric: tabular-nums; background: var(--card); color: var(--text); border: 1px solid var(--border); }
+.review button.cell.corrected { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.review button.cell.uncertain, .review button.cell.invalid { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); font-weight: 700; }
+dialog.editor { border: none; border-radius: 18px; padding: 18px; width: min(92vw, 380px); background: var(--card); color: var(--text); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+dialog.editor::backdrop { background: rgba(0,0,0,.45); }
+dialog.editor h3 { margin: 0 0 6px; }
+dialog.editor input[type=time] { font: inherit; font-size: 2rem; font-weight: 700; width: 100%; padding: 10px; border-radius: 12px; border: 2px solid var(--accent); background: var(--bg); color: var(--text); text-align: center; }
+.error-text { color: var(--bad); min-height: 1em; margin: 6px 0; font-size: .9rem; }
+.check-bar .banner { margin-top: 0; }
+.info-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; margin-left: 6px; border-radius: 50%; font-size: .8rem; font-weight: 700; font-style: italic; font-family: Georgia, serif; vertical-align: middle; background: var(--accent-soft); color: var(--accent); }
+dialog.info { max-height: 85vh; overflow-y: auto; line-height: 1.45; }
+dialog.info p { margin: 0 0 10px; font-size: .95rem; }
+.warn-text { background: var(--warn-bg); color: var(--warn); padding: 10px; border-radius: 10px; }
+.est-badge { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 99px; background: #f3c56b; color: #3a2f14; font-size: .75rem; font-weight: 700; }
+.list li { flex-wrap: wrap; } .list li .row { flex-wrap: wrap; }

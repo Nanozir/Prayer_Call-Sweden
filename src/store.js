@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS = {
   offset: 0, // extra reminder this many minutes before the prayer time (0 = none)
   sound: 'chime', // 'bells' | 'chime' | 'off' – sound at the prayer time
   reminders: true, // remind when a schedule is about to run out
+  estimate: false, // emergency mode: calculate times when no mosque schedule exists
 };
 
 async function getJson(key, fallback) {
