@@ -1,9 +1,10 @@
 name: Bygg Android-app
 
 # Every push builds and tests the app (APK available under the run's artifacts).
-# When package.json holds a version that has no release yet, the build is
-# published as GitHub Release vX.Y.Z (tag created automatically), with the
-# matching CHANGELOG.md section as release notes. Bumping the version = releasing.
+# On main, when package.json holds a version that has no release yet, the build
+# is published as GitHub Release vX.Y.Z (tag created automatically), with the
+# matching CHANGELOG.md section as release notes. Other branches (e.g. the daily
+# check's PRs) never publish – a release happens only after review and merge.
 on:
   push:
     branches: ['**']
@@ -44,7 +45,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="v${{ steps.version.outputs.version }}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "Gren $GITHUB_REF_NAME – releaser publiceras bara från main."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            # Still validate the changelog so the PR fails early if it is missing.
+            node scripts/release-notes.mjs "${{ steps.version.outputs.version }}" > /dev/null
+          elif gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag finns redan – bygger utan att publicera."
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else

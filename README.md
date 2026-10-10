@@ -99,11 +99,19 @@ Så släpps en ny version:
 1. Höj `version` i `package.json` (`npm version patch|minor|major --no-git-tag-version`:
    patch = buggfix, minor = ny funktion, major = stor förändring).
 2. Skriv vad som ändrats under en ny rubrik `## [X.Y.Z]` i `CHANGELOG.md`.
-3. Committa och pusha. GitHub bygger APK:n och, eftersom versionen är ny, skapar taggen
-   `vX.Y.Z` och publicerar releasen med ändringsloggen. Saknas rubriken i ändringsloggen
-   stoppas bygget.
+3. Committa, pusha och slå ihop till `main`. När versionen är ny på `main` skapar GitHub
+   taggen `vX.Y.Z` och publicerar releasen med ändringsloggen. Saknas rubriken i
+   ändringsloggen stoppas bygget.
 
-Pushar utan ny version bygger och testar bara (APK finns som artefakt under Actions).
+Andra grenar och pushar utan ny version bygger och testar bara (APK finns som artefakt
+under Actions).
+
+## Daglig felkontroll
+
+En schemalagd Claude-rutin ("Salah-kalender: daglig felkontroll", varje morgon 06:47) går
+igenom koden, kör alla tester och letar efter buggar och säkerhetsbrister. Hittar den något
+öppnar den en PR (`daily-check/ÅÅÅÅ-MM-DD`) – den slår aldrig ihop själv. Rutinen hanteras
+under Routines på claude.ai.
 
 ## Utveckling
 
