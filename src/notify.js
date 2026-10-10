@@ -6,6 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { PRAYERS, stockholmToDate, monthLabel, MONTHS_SV } from './time.js';
 import { coverageEnd, scheduleStatus } from './store.js';
+import { withEstimates } from './estimate.js';
 
 // Android ties sound to the notification channel (fixed once created), so each
 // sound choice gets its own channel. Sound files live in android/.../res/raw.
@@ -77,10 +78,11 @@ export function prayerNotifications(schedules, settings, now) {
         const hhmm = time.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
         const base = (sched.year * 10000 + sched.month * 100 + d + 1) * 10 + p;
         // Always notify at the prayer time itself, so a reminder is never mistaken for it.
+        const note = sched.estimated ? ' – beräknad tid, kan avvika' : ' (Karlstads moské)';
         list.push({
           id: base * 2,
-          title: `Det är dags för ${prayer.name}`,
-          body: `${prayer.name} ${hhmm} (Karlstads moské)`,
+          title: `Det är dags för ${prayer.name}${sched.estimated ? ' (beräknad)' : ''}`,
+          body: `${prayer.name} ${hhmm}${note}`,
           schedule: { at: time, allowWhileIdle: true },
           channelId: prayerChannel(settings.sound),
         });
@@ -97,10 +99,11 @@ export function prayerNotifications(schedules, settings, now) {
       });
     });
   }
-  return list.sort((a, b) => a.schedule.at - b.schedule.at).slice(0, MAX);
+  // Leave room for the two schedule reminders (iOS caps pending notifications at 64).
+  return list.sort((a, b) => a.schedule.at - b.schedule.at).slice(0, MAX - 2);
 }
 
-function reminderNotifications(schedules, now) {
+function reminderNotifications(schedules, now, settings = {}) {
   const end = coverageEnd(schedules);
   if (!end) return [];
   const label = monthLabel(end.year, end.month);
@@ -115,7 +118,9 @@ function reminderNotifications(schedules, now) {
     {
       id: REMINDER_ID_BASE + 2,
       title: 'Bönetidsschemat har gått ut',
-      body: `Inga fler bönenotiser skickas förrän du lägger in schemat för ${monthLabel(next.year, next.month)}.`,
+      body: settings.estimate
+        ? `Beräknade tider används nu (kan avvika). Lägg in moskéns schema för ${monthLabel(next.year, next.month)}.`
+        : `Inga fler bönenotiser skickas förrän du lägger in schemat för ${monthLabel(next.year, next.month)}.`,
       schedule: { at: stockholmToDate(next.year, next.month, 1, 9 * 60) },
     },
   ];
@@ -135,8 +140,8 @@ export async function rescheduleAll(schedules, settings) {
   }
 
   const now = new Date();
-  const prayers = prayerNotifications(schedules, settings, now);
-  const list = [...prayers, ...(settings.reminders ? reminderNotifications(schedules, now) : [])];
+  const prayers = prayerNotifications(withEstimates(schedules, settings), settings, now);
+  const list = [...prayers, ...(settings.reminders ? reminderNotifications(schedules, now, settings) : [])];
   if (list.length) await LocalNotifications.schedule({ notifications: list });
   return { scheduled: list.length, native: true, exact: perms.exact, until: prayers.at(-1)?.schedule.at };
 }

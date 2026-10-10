@@ -39,13 +39,28 @@ console.log(`OCR took ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
 const month = await page.$eval('[data-f=month]', (e) => e.value);
 const year = await page.$eval('[data-f=year]', (e) => e.value);
-const values = await page.$$eval('table.review tbody tr', (trs) => trs.map((tr) => [...tr.querySelectorAll('input')].map((i) => i.value)));
+const values = await page.$$eval('table.review tbody tr', (trs) => trs.map((tr) => [...tr.querySelectorAll('button.cell')].map((b) => b.textContent)));
 let wrong = 0;
 fx.truth.forEach((row, i) => row.forEach((v, c) => { if (values[i]?.[c] !== v) { wrong++; console.log(`day ${i + 1} col ${c}: got ${values[i]?.[c]} want ${v}`); } }));
-const flagged = await page.$$eval('table.review input.corrected, table.review input.uncertain', (els) => els.length);
+const flagged = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
+
+// Edit dialog: "Gå till nästa" opens the first flagged cell; change it and save.
+await page.click('.check-bar button');
+await page.waitForSelector('dialog.editor[open]');
+const [fi, fc] = (await page.$eval('table.review .cell.corrected, table.review .cell.uncertain', (b) => b.dataset.cell)).split('-').map(Number);
+await page.fill('dialog.editor input[type=time]', '15:34');
+await page.click('dialog.editor [value=save]');
+const edited = await page.$eval(`[data-cell="${fi}-${fc}"]`, (b) => ({ text: b.textContent, cls: b.className }));
+if (edited.text !== '15:34' || edited.cls !== 'cell') { console.log('FAIL: edit dialog did not update the cell', edited); process.exit(1); }
+const remaining = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
+if (remaining !== flagged - 1) { console.log('FAIL: flag not cleared'); process.exit(1); }
+// Put the true value back so the saved schedule matches the fixture.
+await page.click(`[data-cell="${fi}-${fc}"]`);
+await page.fill('dialog.editor input[type=time]', fx.truth[fi][fc]);
+await page.click('dialog.editor [value=save]');
 console.log(`month=${month} year=${year} rows=${values.length} wrong=${wrong} flagged=${flagged}`);
 
-await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/review.png` : 'review.png', fullPage: false });
+if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/review.png` });
 await page.click('[data-a=save]');
 await page.waitForSelector('.hero');
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/home.png`, fullPage: true });

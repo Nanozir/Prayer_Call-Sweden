@@ -3,6 +3,29 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.4.0] – 2026-10-10
+
+### Nytt
+- **Ändra tider enkelt:** tryck på en tid i granskningen så öppnas en ruta med tidsväljare, vad
+  appen läste, dagen före/efter och knappen "Stämmer – spara". En räknare visar hur många gula
+  och röda tider som är kvar och "Gå till nästa" hoppar direkt till nästa. Sparade scheman kan
+  också ändras ("Visa / ändra").
+- **Beräknade tider (nödläge)** under Inställningar, med förklaring bakom ⓘ-knappen. När moskéns
+  schema saknas räknas tiderna fram från solens läge över Karlstad, kalibrerat mot moskéns egna
+  scheman (eller samma månad förra året om den finns). Tydligt märkta "beräknad" i appen och
+  notiserna; moskéns schema går alltid före.
+- **Kalenderexport (.ics) för iPhone och andra telefoner:** "📅 Kalender" vid varje schema delar
+  en fil som lägger in alla bönetider med påminnelser i telefonens kalender – ingen app behövs.
+- **iOS-version förberedd** (Capacitor iOS-projekt, byggkontroll på macOS i GitHub Actions).
+  Att installera på iPhone kräver ett Apple-utvecklarkonto, se README.
+
+### Rättat
+- En skärmdump från testet hade av misstag hamnat i repot.
+
+### Övrigt
+- Allt fungerar utan internet: textigenkänning, beräkning, notiser och kalenderexport.
+- På iPhone läggs bara de närmaste dagarnas notiser in åt gången (iOS max 64).
+
 ## [1.3.0] – 2026-10-08
 
 ### Nytt

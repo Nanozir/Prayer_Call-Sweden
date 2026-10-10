@@ -11,6 +11,9 @@ import {
   rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative, SOUND_OPTIONS,
 } from './notify.js';
 import { validateSchedule, rowProblems } from './ocr/correct.js';
+import { withEstimates } from './estimate.js';
+import { shareCalendar } from './share.js';
+import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
 const state = { view: 'home', schedules: {}, settings: null, notifyResult: null, perms: null, draft: null };
@@ -61,13 +64,18 @@ function statusBanners() {
   const out = [];
   const end = coverageEnd(state.schedules, today);
 
-  if (!all.length) {
+  if (!all.length && state.settings.estimate) {
+    out.push(['warn', 'Inget schema från moskén inlagt. Beräknade tider visas och används för notiser – de kan avvika från moskéns tider. Lägg in moskéns schema så snart du kan.', 'import']);
+  } else if (!all.length) {
     out.push(['warn', 'Inget schema inlagt ännu. Ta en bild/skärmdump av moskéns månadsschema och lägg in det.', 'import']);
+  } else if (!end && state.settings.estimate) {
+    out.push(['warn', `Inget schema från moskén för ${monthLabel(today.year, today.month)}. Beräknade tider visas och används för notiser – de kan avvika från moskéns tider. Lägg in moskéns schema så snart det finns.`, 'import']);
   } else if (!end) {
     const upcoming = all.filter((s) => scheduleStatus(s, today) === 'upcoming')
       .sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month))[0];
     out.push(['bad', `Det finns inget schema för ${monthLabel(today.year, today.month)}. `
-      + 'Inga bönenotiser skickas idag, så du får inga felaktiga tider – lägg in månadens schema.'
+      + 'Inga bönenotiser skickas idag, så du får inga felaktiga tider – lägg in månadens schema. '
+      + '(I nödfall kan du slå på "Beräknade tider" under Inställningar.)'
       + (upcoming ? ` (Schemat för ${monthLabel(upcoming.year, upcoming.month)} börjar gälla den 1:a.)` : ''), 'import']);
   } else {
     const daysLeft = end.year === today.year && end.month === today.month ? end.day - today.day : Infinity;
@@ -84,6 +92,9 @@ function statusBanners() {
     out.push(['bad', 'Notiser är avstängda för appen. Slå på dem i telefonens inställningar.']);
   } else if (state.perms && !state.perms.exact) {
     out.push(['warn', 'Appen får inte använda exakta alarm, så notiser kan komma några minuter sent.', 'exact']);
+  }
+  if (Capacitor.getPlatform() === 'ios' && state.notifyResult?.scheduled) {
+    out.push(['warn', 'På iPhone kan bara de närmaste dagarnas notiser läggas in åt gången. Öppna appen minst en gång i veckan så fylls de på.']);
   }
   if (state.notifyResult?.error) out.push(['bad', `Kunde inte schemalägga notiser: ${state.notifyResult.error}`]);
   return out;
@@ -105,15 +116,17 @@ function renderBanners(target) {
 function renderHome() {
   renderBanners(app);
   const today = nowInStockholm();
-  const row = todaysTimes(state.schedules, today);
+  const shown = withEstimates(state.schedules, state.settings, today);
+  const estimated = !!shown[monthKey(today.year, today.month)]?.estimated;
+  const row = todaysTimes(shown, today);
   const wd = WEEKDAYS_SV[weekday(today.year, today.month, today.day)];
 
   if (row) {
-    const next = nextPrayer(state.schedules, today);
+    const next = nextPrayer(shown, today);
     const prev = next ? (next.index > 0 ? row[next.index - 1] : null) : null;
     const pct = next && prev != null ? Math.min(100, Math.max(0, ((today.minutes - prev) / (next.minutes - prev)) * 100)) : 0;
     app.append(h(`<section class="hero">
-      <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}</div>
+      <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}${estimated ? ' <span class="est-badge">Beräknade tider</span>' : ''}</div>
       ${next ? `<div class="hero-label">Nästa bön</div>
         <div class="hero-main"><span class="hero-name">${next.prayer.name}</span><span class="hero-time">${fmt(next.minutes)}</span></div>
         <div class="hero-count">om ${countdown(next.minutes - today.minutes)}</div>
@@ -154,17 +167,23 @@ function renderScheduleList() {
   const today = nowInStockholm();
   const list = Object.entries(state.schedules).sort(([a], [b]) => (a < b ? 1 : -1));
   if (!list.length) return;
-  const card = h('<section class="card"><h2>Inlagda scheman</h2><ul class="list"></ul></section>');
+  const card = h(`<section class="card"><h2>Inlagda scheman</h2><ul class="list"></ul>
+    <p class="muted small-text">📅 <b>Kalender</b> skapar en kalenderfil med alla bönetider och påminnelser.
+      Skicka den till t.ex. en iPhone – öppna filen där och välj "Lägg till alla" så hamnar tiderna i
+      kalendern med notiser, utan att appen behövs.</p></section>`);
   const ul = card.querySelector('ul');
   const labels = { current: 'Gäller nu', upcoming: 'Kommande', expired: 'Utgånget' };
   for (const [key, s] of list) {
     const st = scheduleStatus(s, today);
     const li = h(`<li><span class="sched-name">${monthLabel(s.year, s.month)}<span class="badge ${st}">${labels[st]}</span></span>
-      <span class="row"><button class="secondary small" data-a="edit">Visa</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
+      <span class="row"><button class="secondary small" data-a="edit">Visa / ändra</button><button class="secondary small" data-a="ics" title="Dela till kalender (t.ex. iPhone)">📅 Kalender</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
     li.querySelector('[data-a=edit]').onclick = () => {
       state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true };
       render();
       window.scrollTo(0, 0);
+    };
+    li.querySelector('[data-a=ics]').onclick = async () => {
+      try { await shareCalendar(s, state.settings); } catch (e) { if (!/cancel/i.test(e?.message ?? '')) alert(`Kunde inte dela: ${e.message ?? e}`); }
     };
     li.querySelector('[data-a=del]').onclick = async () => {
       if (!confirm(`Ta bort schemat för ${monthLabel(s.year, s.month)}? Dess notiser tas också bort.`)) return;
@@ -226,7 +245,7 @@ function renderImport() {
       state.draft = {
         year: res.year ?? now.year, month: res.month ?? now.month,
         monthDetected: res.year != null && res.month != null,
-        days: res.days, flags: res.flags, image: imageUrl,
+        days: res.days, flags: res.flags, raw: res.rawRows, image: imageUrl,
       };
       fitDraftToMonth();
       render();
@@ -273,7 +292,9 @@ function renderReview() {
     <p class="legend muted">
       <span style="background:var(--warn-bg);color:var(--warn)">gul</span>automatiskt rättad – titta snabbt
       <br><span style="background:var(--bad-bg);color:var(--bad)">röd</span>osäker – kontrollera mot bilden
+      <br>Tryck på en tid för att ändra eller bekräfta den.
     </p>
+    <div class="check-bar"></div>
     <div class="review-wrap"><table class="review"><thead><tr><th></th>${PRAYERS.map((p) => `<th>${p.name}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
     <div class="issues"></div>
     <div class="row" style="margin-top:12px"><button data-a="save">Spara schema</button><button class="secondary" data-a="cancel">Avbryt</button></div>
@@ -304,42 +325,96 @@ function renderReview() {
   updateStatus();
 
   const tbody = card.querySelector('tbody');
+  const cellClass = (i, c) => {
+    const f = d.flags[i][c];
+    if (d.days[i][c] == null || rowProblems(d.days[i]).includes(c)) return 'cell invalid';
+    return f === 'ok' ? 'cell' : `cell ${f}`;
+  };
+  const checkBar = card.querySelector('.check-bar');
+  const updateCheckBar = () => {
+    const yellow = d.flags.flat().filter((f) => f === 'corrected').length;
+    const red = d.flags.flat().filter((f) => f === 'uncertain').length;
+    if (!yellow && !red) { checkBar.replaceChildren(h('<div class="banner ok">Alla tider är kontrollerade.</div>')); return; }
+    const el = h(`<div class="banner warn">${red ? `<b>${red} röd${red === 1 ? '' : 'a'}</b> ` : ''}${red && yellow ? 'och ' : ''}${yellow ? `<b>${yellow} gul${yellow === 1 ? '' : 'a'}</b> ` : ''}tid${red + yellow === 1 ? '' : 'er'} att kontrollera.
+      <br><button class="secondary small">Gå till nästa</button></div>`);
+    el.querySelector('button').onclick = () => {
+      for (let i = 0; i < d.days.length; i++) {
+        for (let c = 0; c < 6; c++) {
+          if (d.flags[i][c] !== 'ok') { openTimeEditor(i, c); return; }
+        }
+      }
+    };
+    checkBar.replaceChildren(el);
+  };
+  // Redraws a whole day (row order checks depend on all six values).
+  const refreshRow = (i) => {
+    for (let k = 0; k < 6; k++) {
+      const btn = tbody.querySelector(`[data-cell="${i}-${k}"]`);
+      btn.textContent = d.days[i][k] == null ? '––:––' : fmt(d.days[i][k]);
+      btn.className = cellClass(i, k);
+    }
+    updateCheckBar();
+  };
+
+  function openTimeEditor(i, c) {
+    const flag = d.flags[i][c];
+    const near = (k) => (d.days[k]?.[c] != null ? fmt(d.days[k][c]) : '–');
+    const raw = d.raw?.[i]?.[c];
+    const why = flag === 'corrected'
+      ? `Appen läste ${raw ? `"${esc(raw)}"` : 'något oklart'} och rättade det automatiskt. Stämmer tiden med bilden?`
+      : flag === 'uncertain'
+        ? `Appen kunde inte läsa tiden säkert${raw ? ` (läste "${esc(raw)}")` : ''}. Värdet nedan är en uppskattning – kontrollera mot bilden.`
+        : 'Ändra tiden om den inte stämmer med moskéns schema.';
+    const dlg = h(`<dialog class="editor">
+      <form method="dialog">
+        <h3>${PRAYERS[c].name} – ${WEEKDAYS_SV[weekday(d.year, d.month, i + 1)]} ${i + 1} ${MONTHS_SV[d.month - 1]}</h3>
+        <p class="muted">${why}</p>
+        <input type="time" required value="${d.days[i][c] == null ? '' : fmt(d.days[i][c])}" />
+        <p class="muted small-text">Dagen innan: <b>${near(i - 1)}</b> · Dagen efter: <b>${near(i + 1)}</b></p>
+        <p class="error-text"></p>
+        <div class="row">
+          <button value="save" class="primary">${flag === 'ok' ? 'Spara' : 'Stämmer – spara'}</button>
+          <button value="cancel" class="secondary" formnovalidate>Avbryt</button>
+        </div>
+      </form>
+    </dialog>`);
+    const input = dlg.querySelector('input');
+    dlg.querySelector('[value=save]').onclick = (e) => {
+      let val = parseTime(input.value);
+      if (val == null) { e.preventDefault(); dlg.querySelector('.error-text').textContent = 'Ange en tid, t.ex. 15:33.'; return; }
+      if (c === 5 && val < 180) val += 1440; // Isha after midnight
+      d.days[i][c] = val;
+      d.flags[i][c] = 'ok';
+      refreshRow(i);
+    };
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+    input.focus();
+  }
+
   d.days.forEach((row, i) => {
     const tr = document.createElement('tr');
     tr.append(h(`<table><tr><td class="day">${WEEKDAYS_SV[weekday(d.year, d.month, i + 1)].slice(0, 3)} ${i + 1}</td></tr></table>`).querySelector('td'));
     row.forEach((v, c) => {
       const td = document.createElement('td');
-      const inp = document.createElement('input');
-      inp.inputMode = 'numeric';
-      inp.value = fmt(v);
-      inp.className = d.flags[i][c] === 'ok' ? '' : d.flags[i][c];
-      const commit = () => {
-        let text = inp.value.trim();
-        if (/^\d{3,4}$/.test(text)) text = `${text.slice(0, -2)}:${text.slice(-2)}`;
-        let val = parseTime(text);
-        if (val != null && c === 5 && val < 180) val += 1440; // Isha after midnight
-        d.days[i][c] = val;
-        d.flags[i][c] = 'ok';
-        inp.value = val == null ? inp.value : fmt(val);
-        inp.className = val == null ? 'invalid' : '';
-        markRow(tr, i);
-      };
-      inp.onchange = commit;
-      // Tapping into a red cell and leaving it counts as "checked".
-      inp.onblur = () => { if (d.flags[i][c] === 'uncertain') commit(); };
-      td.append(inp);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.cell = `${i}-${c}`;
+      btn.onclick = () => openTimeEditor(i, c);
+      td.append(btn);
       tr.append(td);
     });
     tbody.append(tr);
-    markRow(tr, i);
   });
+  d.days.forEach((_, i) => refreshRow(i));
 
   card.querySelector('[data-a=cancel]').onclick = () => { state.draft = null; render(); };
   card.querySelector('[data-a=save]').onclick = async () => {
     const issuesEl = card.querySelector('.issues');
     const uncertain = d.flags.flat().filter((f) => f === 'uncertain').length;
     const issues = validateSchedule(d);
-    if (uncertain) issues.unshift(`${uncertain} tid${uncertain === 1 ? '' : 'er'} kunde inte läsas säkert (röda). Kontrollera dem mot bilden och tryck på varje röd ruta.`);
+    if (uncertain) issues.unshift(`${uncertain} tid${uncertain === 1 ? '' : 'er'} kunde inte läsas säkert (röda). Tryck på dem, kontrollera mot bilden och spara.`);
     if (issues.length) {
       issuesEl.replaceChildren(h(`<div class="banner bad">${issues.slice(0, 6).map(esc).join('<br>')}${issues.length > 6 ? '<br>…' : ''}</div>`));
       return;
@@ -357,15 +432,34 @@ function renderReview() {
   app.append(card);
 }
 
-function markRow(tr, i) {
-  const bad = rowProblems(state.draft.days[i]);
-  tr.querySelectorAll('input').forEach((inp, c) => {
-    if (bad.includes(c)) inp.classList.add('invalid');
-    else if (inp.classList.contains('invalid') && state.draft.days[i][c] != null) inp.classList.remove('invalid');
-  });
+// ---------------------------------------------------------------- settings
+
+function showEstimateInfo() {
+  const dlg = h(`<dialog class="editor info">
+    <form method="dialog">
+      <h3>Beräknade tider (nödläge)</h3>
+      <p><b>Vad det gör:</b> när det inte finns något schema från moskén för den aktuella eller nästa
+        månad räknar appen fram tiderna själv, så att du ändå får notiser.</p>
+      <p><b>Hur:</b> bönetiderna följer solen. Appen räknar ut solens läge över Karlstad för varje dag
+        (soluppgång, middag, solnedgång, skymning och gryning) och justerar beräkningen så att den
+        stämmer med moskéns egna scheman som du lagt in. Finns samma månad från ett tidigare år
+        används den i stället, eftersom tiderna upprepas nästan exakt varje år. Har du inga egna
+        scheman används moskéns schema för oktober 2026 som grund.</p>
+      <p><b>Hur exakt:</b> nära de månader som finns inlagda brukar det skilja 0–2 minuter. Längre bort
+        kan felet bli större – särskilt <b>Fajr och Isha på sommaren</b>, då det aldrig blir helt mörkt i
+        Karlstad och moskéerna använder egna regler.</p>
+      <p class="warn-text"><b>Varning:</b> använd bara läget om det inte finns något annat alternativ.
+        Moskéns schema går alltid före – så fort du lägger in det används det i stället. Beräknade
+        tider märks med "beräknad" i appen och i notiserna.</p>
+      <p class="muted">Allt räknas ut i telefonen och fungerar utan internet.</p>
+      <div class="row"><button value="ok">Jag förstår</button></div>
+    </form>
+  </dialog>`);
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
 }
 
-// ---------------------------------------------------------------- settings
 
 function renderSettings() {
   const s = state.settings;
@@ -377,6 +471,10 @@ function renderSettings() {
     <div class="toggle"><span>Extra påminnelse innan<br><small class="muted">Notisen vid bönetiden kommer alltid också</small></span>
       <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Ingen'}</option>`).join('')}</select></div>
     <label class="toggle"><span>Påminn när schemat håller på att gå ut</span><input type="checkbox" data-f="reminders" ${s.reminders ? 'checked' : ''}/></label>
+    <div class="toggle"><span>Beräknade tider (nödläge)
+        <button type="button" class="info-btn" data-a="estimate-info" aria-label="Om beräknade tider">i</button>
+        <br><small class="muted">Bara när moskéns schema saknas</small></span>
+      <input type="checkbox" data-f="estimate" ${s.estimate ? 'checked' : ''}/></div>
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
     <p class="muted msg"></p>
   </section>
@@ -411,6 +509,13 @@ function renderSettings() {
     preview.play().catch(() => { msg.textContent = 'Kunde inte spela upp ljudet.'; });
   };
   card.querySelector('[data-f=reminders]').onchange = (e) => { s.reminders = e.target.checked; persist(); };
+  card.querySelector('[data-a=estimate-info]').onclick = () => showEstimateInfo();
+  card.querySelector('[data-f=estimate]').onchange = (e) => {
+    if (e.target.checked && !confirm('Beräknade tider kan avvika från moskéns tider – särskilt Fajr och Isha på sommaren. '
+      + 'Använd dem bara när moskéns schema saknas. Slå på ändå?')) { e.target.checked = false; return; }
+    s.estimate = e.target.checked;
+    persist();
+  };
   card.querySelector('[data-a=test]').onclick = async () => {
     msg.textContent = (await testNotification(s)) ? 'Testnotis kommer om 5 sekunder.' : 'Notiser fungerar bara i appen och kräver tillstånd.';
   };
