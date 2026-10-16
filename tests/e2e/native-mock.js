@@ -36,7 +36,7 @@
     },
     App: {},
     Share: { share: (o) => ({}) },
-    Filesystem: { writeFile: ({ path }) => ({ uri: `file:///cache/${path}` }) },
+    Filesystem: { writeFile: ({ path, data }) => { (mock.files ||= {})[path] = data; return { uri: `file:///cache/${path}` }; } },
   };
   window.CapacitorCustomPlatform = { name: cfg.platform, plugins: {} };
   window.Capacitor = {

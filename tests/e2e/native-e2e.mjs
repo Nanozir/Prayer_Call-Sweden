@@ -4,6 +4,8 @@ import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { writeFile as writeFs, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 const fx = JSON.parse(await readFile('tests/fixtures/karlstad-oktober-2026.json', 'utf8'));
 const toMin = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
@@ -84,6 +86,35 @@ const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: J
   const text = await page.$eval('.health', (e) => e.textContent);
   check(/av 64 notiser inlagda/.test(text), 'iPhone: visar hur många av 64 som används');
   check(!/batteri/i.test(text), 'iPhone: inga Android-specifika punkter');
+  await page.close();
+}
+
+// --- Backup: export on one phone, import on a fresh install ----------------------
+let backupText;
+{
+  const page = await open({ platform: 'android', storage });
+  await page.click('nav button[data-view=settings]');
+  page.once('dialog', (d) => d.accept());
+  await page.click('[data-a=export]');
+  await page.waitForFunction(() => Object.keys(window.__mock.files || {}).some((f) => f.endsWith('.json')));
+  backupText = await page.evaluate(() => Object.entries(window.__mock.files).find(([f]) => f.endsWith('.json'))[1]);
+  check(/"2026-10"/.test(backupText) && /"sound": "adhan"/.test(backupText), 'Säkerhetskopia: exporten innehåller schema och inställningar');
+  await page.close();
+}
+{
+  const page = await open({ platform: 'android', storage: {} });
+  const dir = await mkdtemp(join(tmpdir(), 'salah-'));
+  const file = join(dir, 'backup.json');
+  await writeFs(file, backupText);
+  await page.click('nav button[data-view=settings]');
+  page.once('dialog', (d) => d.accept());
+  await page.setInputFiles('[data-f=import]', file);
+  await page.waitForFunction(() => /Importerat/.test(document.querySelector('.backup-msg')?.textContent ?? ''));
+  const pending = await page.evaluate(() => window.__mock.pending.length);
+  check(pending === 240, `Säkerhetskopia: efter import på ny telefon är notiserna tillbaka (${pending})`);
+  await page.click('nav button[data-view=home]');
+  const fajr = await page.$eval('.prayer .p-time', (e) => e.textContent);
+  check(fajr === '05:11', 'Säkerhetskopia: dagens tider visas efter import');
   await page.close();
 }
 

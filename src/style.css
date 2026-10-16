@@ -244,3 +244,4 @@ html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale
 .qibla.aligned .ring { stroke: var(--accent); stroke-width: 4; }
 .calibrate { text-align: left; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin-top: 12px; }
 .tabs button span { white-space: nowrap; }
+.button.secondary { background: var(--accent-soft); color: var(--accent); } label.button { display: inline-block; cursor: pointer; }
