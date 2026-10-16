@@ -13,7 +13,8 @@ import {
 } from './notify.js';
 import { validateSchedule, rowProblems } from './ocr/correct.js';
 import { withEstimates } from './estimate.js';
-import { shareCalendar } from './share.js';
+import { shareCalendar, shareFile } from './share.js';
+import { buildBackup, parseBackup, backupFileName } from './backup.js';
 import { addDays, sameDay, dayRow, step } from './daynav.js';
 import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
 import { healthItems } from './health.js';
@@ -738,6 +739,13 @@ function renderSettings() {
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
     <p class="muted msg" role="status" aria-live="polite"></p>
   </section>
+  <section class="card"><h2>Säkerhetskopia</h2>
+    <p class="muted">Spara alla scheman och inställningar i en fil – t.ex. för att flytta dem till en ny
+      telefon eller till Google Play-versionen av appen.</p>
+    <div class="row"><button class="secondary" data-a="export">Exportera</button>
+      <label class="button secondary">Importera<input type="file" accept=".json,application/json" data-f="import" hidden /></label></div>
+    <p class="muted backup-msg" role="status" aria-live="polite"></p>
+  </section>
   <section class="card"><h2>Om notiserna</h2><p class="muted">
     Notiser skapas bara för datum som finns i ett inlagt schema. När ett schema gått ut skickas inga bönenotiser
     (så du aldrig får fel tider) – istället får du en påminnelse om att lägga in nästa månad.<br><br>
@@ -780,6 +788,34 @@ function renderSettings() {
       + 'Använd dem bara när moskéns schema saknas. Slå på ändå?')) { e.target.checked = false; return; }
     s.estimate = e.target.checked;
     persist();
+  };
+  const backupMsg = card.querySelector('.backup-msg');
+  card.querySelector('[data-a=export]').onclick = async () => {
+    try {
+      await shareFile(backupFileName(), buildBackup(state.schedules, state.settings, __APP_VERSION__), 'application/json',
+        'Säkerhetskopia av Salah-kalender. Öppna appen → Inställningar → Importera för att läsa in den.');
+      backupMsg.textContent = 'Säkerhetskopian är skapad.';
+    } catch (e) {
+      if (!/cancel/i.test(e?.message ?? '')) backupMsg.textContent = `Kunde inte exportera: ${e.message ?? e}`;
+    }
+  };
+  card.querySelector('[data-f=import]').onchange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = parseBackup(await file.text());
+      const months = Object.values(data.schedules).sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month));
+      const list = months.map((m) => monthLabel(m.year, m.month)).join(', ') || 'inga scheman';
+      if (!confirm(`Importera ${months.length} schema(n): ${list}?\nMånader som redan finns ersätts${data.settings ? ', och inställningarna ersätts' : ''}.`)) return;
+      for (const m of months) state.schedules = await saveSchedule(m);
+      if (data.settings) { state.settings = data.settings; await saveSettings(state.settings); }
+      await refreshNotifications();
+      render();
+      app.querySelector('.backup-msg').textContent = `Importerat: ${list}.${data.skipped ? ` ${data.skipped} trasiga månader hoppades över.` : ''}`;
+    } catch (err) {
+      backupMsg.textContent = err.message;
+    }
   };
   const healthBox = card.querySelector('.health-box');
   renderHealth(healthBox);

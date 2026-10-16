@@ -86,7 +86,8 @@ jobs:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
+        # APK for direct install (GitHub), AAB for Google Play.
+        run: ./gradlew assembleRelease bundleRelease --no-daemon
 
       - name: Kontrollera att OCR-filer och ljud finns i APK:n
         run: |
@@ -106,6 +107,8 @@ jobs:
           apk="Salah-kalender-v${{ steps.version.outputs.version }}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
+          # Android App Bundle for Google Play (Play Console → Internt test → Skapa ny version).
+          cp android/app/build/outputs/bundle/release/app-release.aab "Salah-kalender-v${{ steps.version.outputs.version }}-google-play.aab"
           # Print the signing certificate so anyone can verify who signed the APK.
           "$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs "$apk" | tee signing-cert.txt
           if [ -f release-notes.md ]; then
@@ -122,6 +125,7 @@ jobs:
           path: |
             Salah-kalender-v*.apk
             Salah-kalender-v*.apk.sha256
+            Salah-kalender-v*-google-play.aab
 
       - name: Publicera release
         if: steps.release.outputs.publish == 'true'
@@ -134,4 +138,5 @@ jobs:
           files: |
             Salah-kalender-v*.apk
             Salah-kalender-v*.apk.sha256
+            Salah-kalender-v*-google-play.aab
           make_latest: true
