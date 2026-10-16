@@ -8,6 +8,11 @@ updates:
   - package-ecosystem: gradle
     directory: /android
     schedule: { interval: weekly }
+    ignore:
+      # Gradle 9.6+ removed an internal API that the Android Gradle Plugin 8.x (used by
+      # Capacitor 8) needs. Re-enable when the project moves to AGP 9.
+      - dependency-name: gradle-wrapper
+        versions: ['>= 9.6']
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
