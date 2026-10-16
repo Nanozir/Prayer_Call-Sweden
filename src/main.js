@@ -18,6 +18,7 @@ import { addDays, sameDay, dayRow, step } from './daynav.js';
 import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
 import { healthItems } from './health.js';
 import { hijriDate } from './hijri.js';
+import { qiblaBearing, distanceKm, headingFromEvent, turnBy, compassWord } from './qibla.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
@@ -48,8 +49,10 @@ function show(view) {
 
 function render() {
   app.replaceChildren();
+  stopCompass?.();
   if (state.view === 'home') renderHome();
   else if (state.view === 'import') renderImport();
+  else if (state.view === 'qibla') renderQibla();
   else renderSettings();
 }
 
@@ -545,6 +548,84 @@ function renderReview() {
     await refreshNotifications();
     show('home');
     window.scrollTo(0, 0);
+  };
+  app.append(card);
+}
+
+// ---------------------------------------------------------------- qibla
+
+let stopCompass = null;
+
+function renderQibla() {
+  const bearing = qiblaBearing();
+  const card = h(`<section class="card qibla">
+    <h2>Qibla från Karlstad</h2>
+    <p class="qibla-facts"><b>${Math.round(bearing)}°</b> från norr (${compassWord(bearing)}) · ${Math.round(distanceKm()).toLocaleString('sv-SE')} km till Mecka</p>
+    <div class="compass" aria-hidden="true">
+      <div class="compass-pointer"></div>
+      <svg class="dial" viewBox="-100 -100 200 200">
+        <circle r="96" class="ring" />
+        ${Array.from({ length: 72 }, (_, i) => `<line class="${i % 18 === 0 ? 'tick major' : 'tick'}" x1="0" y1="-96" x2="0" y2="${i % 18 === 0 ? -84 : -90}" transform="rotate(${i * 5})" />`).join('')}
+        ${[['N', 0], ['Ö', 90], ['S', 180], ['V', 270]].map(([t, a]) => `<text class="${t === 'N' ? 'north' : ''}" transform="rotate(${a}) translate(0 -70) rotate(${-a})" dy="6">${t}</text>`).join('')}
+        <g transform="rotate(${bearing})">
+          <line class="qibla-line" x1="0" y1="0" x2="0" y2="-60" />
+          <g transform="translate(0 -60)"><rect class="kaaba" x="-9" y="-9" width="18" height="18" rx="2" /><rect class="kaaba-band" x="-9" y="-4" width="18" height="3" /></g>
+        </g>
+      </svg>
+    </div>
+    <p class="compass-status" role="status" aria-live="polite">Tryck på knappen för att starta kompassen.</p>
+    <button data-a="start">Starta kompassen</button>
+    <div class="calibrate muted small-text">
+      <b>För bästa resultat:</b> håll telefonen plant framför dig och håll dig borta från metall,
+      magneter och elektronik (även magnetiska mobilskal). Om riktningen hoppar: rör telefonen i
+      en liggande åtta några gånger för att kalibrera kompassen.
+    </div>
+    <p class="muted small-text">Riktningen räknas från Karlstads koordinater – ingen platsåtkomst behövs.
+      Kompassens noggrannhet är ofta ±5–10°.</p>
+  </section>`);
+  const dial = card.querySelector('.dial');
+  const statusEl = card.querySelector('.compass-status');
+  const startBtn = card.querySelector('[data-a=start]');
+  let aligned = false;
+
+  const onOrientation = (e) => {
+    const heading = headingFromEvent(e, screen.orientation?.angle ?? 0);
+    if (heading == null) return;
+    gotEvent = true;
+    // Unwrap the angle so passing north (359° → 1°) does not spin the dial a full turn.
+    rotation += ((-heading - rotation + 540) % 360) - 180;
+    dial.style.transform = `rotate(${rotation}deg)`;
+    const turn = turnBy(heading, bearing);
+    const nowAligned = Math.abs(turn) <= 5;
+    card.classList.toggle('aligned', nowAligned);
+    if (nowAligned && !aligned) navigator.vibrate?.(60);
+    aligned = nowAligned;
+    statusEl.textContent = nowAligned
+      ? '✓ Du är vänd mot Qibla.'
+      : `Vrid dig ${Math.abs(Math.round(turn))}° åt ${turn > 0 ? 'höger' : 'vänster'}.`;
+  };
+  let gotEvent = false;
+  let rotation = 0;
+  const eventName = 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
+
+  startBtn.onclick = async () => {
+    try {
+      // iPhone asks for permission to read the motion sensors (must follow a tap).
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') { statusEl.textContent = 'Kompassen fick inte åtkomst till rörelsesensorn. Du kan tillåta det i telefonens inställningar.'; return; }
+      }
+    } catch { /* not supported – fall through */ }
+    window.addEventListener(eventName, onOrientation);
+    stopCompass = () => { window.removeEventListener(eventName, onOrientation); stopCompass = null; };
+    startBtn.hidden = true;
+    statusEl.textContent = 'Söker kompass…';
+    setTimeout(() => {
+      if (!gotEvent) {
+        statusEl.textContent = `Ingen kompass hittades i den här enheten. Använd en vanlig kompass: vänd dig ${Math.round(bearing)}° (${compassWord(bearing)}).`;
+        startBtn.hidden = false;
+      }
+    }, 2500);
   };
   app.append(card);
 }

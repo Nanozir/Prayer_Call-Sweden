@@ -223,3 +223,24 @@ html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale
 @keyframes vtIn { from { transform: translateX(var(--vt-x)); opacity: 0; } }
 @keyframes vtOutScale { to { transform: translateX(var(--vt-x)) scale(.92); opacity: 0; } }
 @keyframes vtInScale { from { transform: translateX(var(--vt-x)) scale(.92); opacity: 0; } }
+
+/* ---- Qibla compass (v1.6) ---- */
+.qibla { text-align: center; }
+.qibla-facts { margin: 0 0 10px; }
+.compass { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 10px auto 14px; }
+.compass .dial { width: 100%; height: 100%; transition: transform .15s linear; }
+.compass-pointer { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0;
+  border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 16px solid var(--accent); z-index: 1; }
+.dial .ring { fill: var(--card); stroke: var(--border); stroke-width: 2; }
+.dial .tick { stroke: var(--muted); stroke-width: 1; }
+.dial .tick.major { stroke: var(--text); stroke-width: 2; }
+.dial text { fill: var(--muted); font-size: 16px; font-weight: 700; text-anchor: middle; font-family: system-ui, sans-serif; }
+.dial text.north { fill: var(--bad); }
+.dial .qibla-line { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.dial .kaaba { fill: #1c2321; stroke: #f3c56b; stroke-width: 1.5; }
+.dial .kaaba-band { fill: #f3c56b; }
+.compass-status { font-weight: 700; min-height: 1.4em; }
+.qibla.aligned .compass-status { color: var(--accent); }
+.qibla.aligned .ring { stroke: var(--accent); stroke-width: 4; }
+.calibrate { text-align: left; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin-top: 12px; }
+.tabs button span { white-space: nowrap; }

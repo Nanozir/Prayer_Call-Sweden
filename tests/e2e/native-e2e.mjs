@@ -84,6 +84,42 @@ const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: J
   await page.close();
 }
 
+// --- Qibla compass with simulated sensor readings ------------------------------
+{
+  const page = await open({ platform: 'android', storage });
+  await page.click('nav button[data-view=qibla]');
+  const facts = await page.$eval('.qibla-facts', (e) => e.textContent);
+  check(/142°.*sydost.*4\s?707 km/.test(facts), `Qibla: ${facts.trim()}`);
+  await page.click('[data-a=start]');
+  const turn = (alpha) => page.evaluate((a) => window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', { alpha: a, beta: 0, gamma: 0, absolute: true })), alpha);
+  await turn(360 - 355); // magnetic 355° + 5° declination = facing true north
+  let status = await page.$eval('.compass-status', (e) => e.textContent);
+  check(/Vrid dig 142° åt höger/.test(status), `Qibla: mot norr → "${status}"`);
+  await turn(360 - 137); // magnetic 137 + 5 = 142 true → aligned
+  status = await page.$eval('.compass-status', (e) => e.textContent);
+  const aligned = await page.$eval('.qibla', (e) => e.classList.contains('aligned'));
+  check(aligned && /vänd mot Qibla/.test(status), `Qibla: mot 142° → "${status}"`);
+  await page.waitForTimeout(400);
+  const rot = await page.$eval('.dial', (e) => e.style.transform);
+  check(rot === 'rotate(-142deg)', `Qibla: ratten vriden så att Kaba pekar uppåt (${rot})`);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/qibla.png` });
+  await turn(360 - 350); // 355° true
+  const before = await page.$eval('.dial', (e) => e.style.transform);
+  await turn(360 - 10); // 15° true – passing north
+  const after = await page.$eval('.dial', (e) => e.style.transform);
+  check(before === 'rotate(5deg)' && after === 'rotate(-15deg)', `Qibla: passerar norr med 20°, inte ett helt varv (${before} → ${after})`);
+  await page.close();
+}
+{
+  const page = await open({ platform: 'android', storage });
+  await page.click('nav button[data-view=qibla]');
+  await page.click('[data-a=start]');
+  await page.waitForTimeout(2800);
+  const status = await page.$eval('.compass-status', (e) => e.textContent);
+  check(/Ingen kompass hittades.*142°/.test(status), 'Qibla: utan sensor visas riktningen i grader');
+  await page.close();
+}
+
 await browser.close();
 server.close();
 if (failed) process.exit(1);
