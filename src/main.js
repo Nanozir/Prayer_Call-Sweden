@@ -455,7 +455,9 @@ function renderReview() {
     const flag = d.flags[i][c];
     const near = (k) => (d.days[k]?.[c] != null ? fmt(d.days[k][c]) : '–');
     const raw = d.raw?.[i]?.[c];
-    const why = flag === 'corrected'
+    const why = !d.raw && !d.existing && d.days[i][c] == null
+      ? 'Skriv in tiden från moskéns schema.'
+      : flag === 'corrected'
       ? `Appen läste ${raw ? `"${esc(raw)}"` : 'något oklart'} och rättade det automatiskt. Stämmer tiden med bilden?`
       : flag === 'uncertain'
         ? `Appen kunde inte läsa tiden säkert${raw ? ` (läste "${esc(raw)}")` : ''}. Värdet nedan är en uppskattning – kontrollera mot bilden.`

@@ -6,7 +6,8 @@
   <!-- Only the app's own bundled files may load; no remote scripts, frames or requests.
        'unsafe-inline' script is required because Capacitor injects its bridge inline. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'" />
-  <meta name="theme-color" content="#0f5132" />
+  <meta name="theme-color" content="#0f5132" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#121614" media="(prefers-color-scheme: dark)" />
   <title>Salah-kalender</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
