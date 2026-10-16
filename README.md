@@ -28,6 +28,15 @@ scheman behålls. Vad som ändrats står i [CHANGELOG.md](CHANGELOG.md).
 Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, och tillåt
 "Alarm och påminnelser" (exakta alarm) om appen ber om det.
 
+## Funktioner i korthet
+
+- **Idag:** nästa bön med nedräkning, hijri-datum, svep mellan dagar.
+- **Scheman:** läs in moskéns schema från en bild, granska/ändra tider, kalenderexport.
+- **Qibla:** kompass mot Mecka (142° från Karlstad), utan platsbehörighet.
+- **Inställningar:** notiser och ljud, "Fungerar notiserna?"-kontroll, beräknade tider (nödläge),
+  justering av hijri-datum.
+- **Widget (Android):** nästa bön med nedräkning på hemskärmen.
+
 ## iPhone
 
 En iPhone kan inte installera appfiler direkt från nätet som Android kan – Apple kräver att
@@ -132,6 +141,10 @@ under Routines på claude.ai.
 npm install
 npm test            # enhetstester (rättningslogik, tidszoner)
 npm run test:ocr    # läser in exempelbilden i Chromium och jämför alla 186 tider
+npm run test:ocr-bench   # försämrade bilder (skugga, låg upplösning, mörkt läge, oskärpa);
+                         # misslyckas om något fel inte markeras gult/rött
+npm run test:native # kör appen som "Android"/"iPhone" (simulerad native-del): notiser,
+                    # notiskontrollen, widgetdata, kiblakompassen
 npm run sounds      # genererar om notisljuden (lågmälda klocktoner)
 npm run build && npx cap sync   # öppna sedan android/ i Android Studio eller ios/ i Xcode
 ```
@@ -139,5 +152,10 @@ npm run build && npx cap sync   # öppna sedan android/ i Android Studio eller i
 - `src/ocr/grid.js` – hittar tabellens linjer i bilden
 - `src/ocr/recognize.js` – läser varje cell med Tesseract (endast siffror)
 - `src/ocr/correct.js` – rättar läsfel med hjälp av att tiderna bara ändras lite per dag
-- `src/notify.js` – schemalägger notiser (alltid om från början, inget blir kvar)
+- `src/ocr/binarize.js` – bildförbehandling (Sauvola, kontrast, mörkt läge)
+- `src/notify.js` – schemalägger notiser (alltid om från början, inget blir kvar) och widgetdata
+- `src/health.js` – "Fungerar notiserna?"-listan
+- `src/qibla.js`, `src/hijri.js`, `src/daynav.js`, `src/estimate.js`, `src/ics.js`
+- `android/app/src/main/java/se/salahkalender/app/` – egen native-kod: batteristatus,
+  inställningsgenvägar (`SalahNativePlugin`) och widgeten (`NextPrayerWidget`)
 - Alla tider tolkas som svensk tid (Europe/Stockholm), inkl. sommartid.

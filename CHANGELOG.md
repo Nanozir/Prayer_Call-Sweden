@@ -3,6 +3,35 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.6.0] – 2026-10-16
+
+### Nytt
+- **Bättre bildinläsning:** adaptiv binarisering (Sauvola) per cell, automatisk hantering av
+  skärmdumpar i mörkt läge, och osäkra celler läses en gång till med annan bildbehandling.
+  Kontrollen mot grannarnas tider är skärpt (1,5 min i stället för 4), så även små läsfel
+  markeras i stället för att smita igenom. Testat på försämrade bilder: skugga 183 → 0 fel,
+  oskärpa 85 → 0, mörkt läge 186 → 0, låg upplösning 67 → 37 (alla markerade).
+- **"Fungerar notiserna?"** under Inställningar: kollar notistillstånd, exakta alarm,
+  batterioptimering och hur många notiser som är inlagda (iPhone: X av 64), med knappar direkt
+  till rätt inställning.
+- **Widget för hemskärmen (Android):** nästa bön med nedräkning. Håll fingret på hemskärmen →
+  Widgetar → Salah-kalender.
+- **Qibla-kompass** (ny flik): 142° (sydost) från Karlstad, ingen platsbehörighet behövs.
+- **Hijri-datum** under dagens datum, med ⓘ-förklaring och justering ±2 dagar för månsyn.
+- **Mjukare dags-/månadsbyten** med View Transitions (med reservanimation på äldre telefoner).
+
+### Förbättrat
+- Systemets egna kontroller (tidsväljare, listor, kryssrutor) följer mörkt läge.
+- Skärmläsare: räknaren för gula/röda tider, inläsningsförloppet och fel läses upp; varje tid i
+  granskningen har en beskrivande etikett.
+- Uppdaterade GitHub Actions och vite. Gradle 9 hoppas över tills vidare (fungerar inte med
+  Androids byggplugin 8.x).
+
+### Rättat
+- Kalenderexport: semikolon i texter escapas korrekt (från den dagliga kontrollen, PR #14).
+- "Till och med"-datumet för notiser räknade med schemapåminnelsen.
+- Manuell inmatning sa felaktigt "kunde inte läsa tiden".
+
 ## [1.5.0] – 2026-10-10
 
 ### Nytt
