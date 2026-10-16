@@ -312,12 +312,12 @@ function renderImport() {
     <div class="progress-box" hidden>
       <img class="thumb" alt="" />
       <div class="progress-info">
-        <div class="msg">Förbereder…</div>
+        <div class="msg" role="status" aria-live="polite">Förbereder…</div>
         <div class="bar"><span></span></div>
         <div class="muted pct"></div>
       </div>
     </div>
-    <div class="error"></div>
+    <div class="error" role="alert"></div>
     <p class="muted small-text">Tips: en rak, skarp bild där hela tabellen syns ger bäst resultat.</p>
     <button class="secondary" data-a="manual">Skriv in manuellt istället</button>
   </section>`);
@@ -393,9 +393,9 @@ function renderReview() {
       <br><span style="background:var(--bad-bg);color:var(--bad)">röd</span>osäker – kontrollera mot bilden
       <br>Tryck på en tid för att ändra eller bekräfta den.
     </p>
-    <div class="check-bar"></div>
+    <div class="check-bar" role="status" aria-live="polite"></div>
     <div class="review-wrap"><table class="review"><thead><tr><th></th>${PRAYERS.map((p) => `<th>${p.name}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
-    <div class="issues"></div>
+    <div class="issues" role="alert"></div>
     <div class="row" style="margin-top:12px"><button data-a="save">Spara schema</button><button class="secondary" data-a="cancel">Avbryt</button></div>
   </section>`);
   if (d.image) card.querySelector('img.preview').src = d.image;
@@ -451,6 +451,10 @@ function renderReview() {
       const btn = tbody.querySelector(`[data-cell="${i}-${k}"]`);
       btn.textContent = d.days[i][k] == null ? '––:––' : fmt(d.days[i][k]);
       btn.className = cellClass(i, k);
+      // Colour alone does not reach screen readers: say what the cell is and its state.
+      const state = btn.className.includes('uncertain') || btn.className.includes('invalid') ? ', osäker – kontrollera'
+        : btn.className.includes('corrected') ? ', automatiskt rättad' : '';
+      btn.setAttribute('aria-label', `${PRAYERS[k].name} ${WEEKDAYS_SV[weekday(d.year, d.month, i + 1)]} ${i + 1} ${MONTHS_SV[d.month - 1]}: ${d.days[i][k] == null ? 'saknas' : fmt(d.days[i][k])}${state}`);
     }
     updateCheckBar();
   };
@@ -601,7 +605,7 @@ async function renderHealth(box) {
     'add-schedule': ['Lägg till schema', () => show('import')],
   };
   const items = healthItems(f, battery, hasToday).map((it) => ({ ...it, action: ACTIONS[it.action] }));
-  const list = h('<ul class="health" aria-live="polite"></ul>');
+  const list = h('<ul class="health"></ul>');
   for (const it of items) {
     const li = h(`<li class="${it.ok ? 'ok' : 'bad'}"><span class="hi" aria-hidden="true">${it.ok ? '✅' : '⚠️'}</span>
       <span><b>${esc(it.text)}</b>${it.ok && it.note ? `<br><small class="muted">${esc(it.note)}</small>` : ''}</span></li>`);
@@ -622,7 +626,7 @@ async function renderHealth(box) {
 
 function renderSettings() {
   const s = state.settings;
-  const card = h(`<div><section class="card"><h2>Fungerar notiserna?</h2><div class="health-box"></div>
+  const card = h(`<div><section class="card"><h2>Fungerar notiserna?</h2><div class="health-box" role="status" aria-live="polite"></div>
     <button class="secondary small" data-a="recheck">Kontrollera igen</button></section>
     <section class="card"><h2>Notiser</h2><div class="prayers"></div>
     <div class="toggle"><span>Ljud vid bönetiden</span>
@@ -639,7 +643,7 @@ function renderSettings() {
         <br><small class="muted">Bara när moskéns schema saknas</small></span>
       <input type="checkbox" data-f="estimate" ${s.estimate ? 'checked' : ''}/></div>
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
-    <p class="muted msg"></p>
+    <p class="muted msg" role="status" aria-live="polite"></p>
   </section>
   <section class="card"><h2>Om notiserna</h2><p class="muted">
     Notiser skapas bara för datum som finns i ett inlagt schema. När ett schema gått ut skickas inga bönenotiser

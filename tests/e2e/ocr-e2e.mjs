@@ -44,6 +44,11 @@ let wrong = 0;
 fx.truth.forEach((row, i) => row.forEach((v, c) => { if (values[i]?.[c] !== v) { wrong++; console.log(`day ${i + 1} col ${c}: got ${values[i]?.[c]} want ${v}`); } }));
 const flagged = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
 
+// Accessibility: the counter is announced, cells carry a descriptive label.
+const live = await page.$eval('.check-bar', (e) => e.getAttribute('aria-live'));
+const label = await page.$eval('[data-cell="0-3"]', (b) => b.getAttribute('aria-label'));
+if (live !== 'polite' || !/^Asr Tors 1 oktober: 15:48/.test(label)) { console.log('FAIL: a11y', live, label); process.exit(1); }
+
 // Edit dialog: open a cell (the first flagged one if any), change it and save.
 const hasFlags = flagged > 0;
 if (hasFlags) await page.click('.check-bar button'); else await page.click('[data-cell="12-3"]');
