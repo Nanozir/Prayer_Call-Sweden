@@ -9,11 +9,14 @@ import {
 } from './store.js';
 import {
   rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative, SOUND_OPTIONS,
+  notificationFacts,
 } from './notify.js';
 import { validateSchedule, rowProblems } from './ocr/correct.js';
 import { withEstimates } from './estimate.js';
 import { shareCalendar } from './share.js';
 import { addDays, sameDay, dayRow, step } from './daynav.js';
+import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
+import { healthItems } from './health.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
@@ -553,9 +556,50 @@ function showEstimateInfo() {
 }
 
 
+// "Fungerar notiserna?" – one line per thing that can stop or delay a prayer notification.
+async function renderHealth(box) {
+  box.replaceChildren(h('<p class="muted">Kontrollerar…</p>'));
+  const f = await notificationFacts();
+  if (!f.native) {
+    box.replaceChildren(h('<p class="muted">Kontrollen fungerar bara i den installerade appen.</p>'));
+    return;
+  }
+  const today = nowInStockholm();
+  const shown = withEstimates(state.schedules, state.settings, today);
+  const hasToday = !!shown[monthKey(today.year, today.month)];
+  const battery = f.platform === 'android' ? await batteryStatus() : null;
+  const recheck = () => refreshNotifications().then(() => renderHealth(box));
+  const ACTIONS = {
+    'notification-settings': ['Öppna notisinställningar', openNotificationSettings],
+    'exact-alarms': ['Tillåt exakta alarm', openExactAlarmSettings],
+    'battery-settings': ['Öppna batteriinställningar', openBatterySettings],
+    'add-schedule': ['Lägg till schema', () => show('import')],
+  };
+  const items = healthItems(f, battery, hasToday).map((it) => ({ ...it, action: ACTIONS[it.action] }));
+  const list = h('<ul class="health" aria-live="polite"></ul>');
+  for (const it of items) {
+    const li = h(`<li class="${it.ok ? 'ok' : 'bad'}"><span class="hi" aria-hidden="true">${it.ok ? '✅' : '⚠️'}</span>
+      <span><b>${esc(it.text)}</b>${it.ok && it.note ? `<br><small class="muted">${esc(it.note)}</small>` : ''}</span></li>`);
+    if (!it.ok && it.action) {
+      const b = h(`<button class="secondary small">${esc(it.action[0])}</button>`);
+      b.onclick = async () => { await it.action[1](); setTimeout(recheck, 800); };
+      li.querySelector('span:last-child').append(h('<br>'), b);
+    }
+    list.append(li);
+  }
+  const allOk = items.every((i) => i.ok);
+  box.replaceChildren(
+    h(`<p class="${allOk ? 'health-ok' : 'health-bad'}">${allOk ? 'Allt ser bra ut – notiserna bör komma i tid.' : 'Något kan hindra notiserna:'}</p>`),
+    list,
+    h('<p class="muted small-text">Tänk också på att Stör ej och tyst läge kan dölja ljudet.</p>'),
+  );
+}
+
 function renderSettings() {
   const s = state.settings;
-  const card = h(`<div><section class="card"><h2>Notiser</h2><div class="prayers"></div>
+  const card = h(`<div><section class="card"><h2>Fungerar notiserna?</h2><div class="health-box"></div>
+    <button class="secondary small" data-a="recheck">Kontrollera igen</button></section>
+    <section class="card"><h2>Notiser</h2><div class="prayers"></div>
     <div class="toggle"><span>Ljud vid bönetiden</span>
       <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
     <div class="row sound-row"><button class="secondary small" data-a="listen">▶ Lyssna</button>
@@ -608,6 +652,9 @@ function renderSettings() {
     s.estimate = e.target.checked;
     persist();
   };
+  const healthBox = card.querySelector('.health-box');
+  renderHealth(healthBox);
+  card.querySelector('[data-a=recheck]').onclick = async () => { await refreshNotifications(); renderHealth(healthBox); };
   card.querySelector('[data-a=test]').onclick = async () => {
     msg.textContent = (await testNotification(s)) ? 'Testnotis kommer om 5 sekunder.' : 'Notiser fungerar bara i appen och kräver tillstånd.';
   };
@@ -627,7 +674,8 @@ async function init() {
   App.addListener('appStateChange', async ({ isActive }) => {
     if (!isActive) return;
     await refreshNotifications();
-    if (state.view === 'home') render();
+    // Back from the system settings: home and the notification check show fresh status.
+    if (state.view === 'home' || state.view === 'settings') render();
   }).catch(() => {});
   setInterval(() => { if (state.view === 'home') render(); }, 30_000);
 }

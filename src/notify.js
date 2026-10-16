@@ -159,3 +159,27 @@ export async function testNotification(settings) {
   });
   return true;
 }
+
+/** Facts for the "Fungerar notiserna?" check in Settings. */
+export async function notificationFacts() {
+  if (!isNative()) return { native: false };
+  const platform = Capacitor.getPlatform();
+  const perm = await LocalNotifications.checkPermissions();
+  let exact = null;
+  if (platform === 'android') {
+    try { exact = (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'; } catch { exact = null; }
+  }
+  const pending = (await LocalNotifications.getPending()).notifications;
+  // Last *prayer* notification – schedule reminders (ids from REMINDER_ID_BASE) are not prayers.
+  const times = pending.filter((n) => n.id < REMINDER_ID_BASE)
+    .map((n) => new Date(n.schedule?.at ?? 0).getTime()).filter((t) => t > 0).sort((a, b) => a - b);
+  return {
+    native: true,
+    platform,
+    display: perm.display === 'granted',
+    exact,
+    pending: pending.length,
+    limit: platform === 'ios' ? 64 : 500,
+    last: times.length ? new Date(times[times.length - 1]) : null,
+  };
+}
