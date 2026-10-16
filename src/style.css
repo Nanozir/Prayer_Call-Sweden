@@ -1,4 +1,6 @@
 :root {
+  /* Native controls (time picker, selects, checkboxes, scrollbars) follow the theme too. */
+  color-scheme: light dark;
   --bg: #f6f7f4;
   --card: #ffffff;
   --text: #1c2321;
@@ -193,3 +195,52 @@ button.link { background: none; color: var(--accent); padding: 0; font-size: .85
 @keyframes chip { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.8); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) { .day-pane, .month-chip { animation: none !important; } }
 body { overflow-x: hidden; }
+
+/* ---- notification health check (v1.6) ---- */
+.health { list-style: none; padding: 0; margin: 6px 0 10px; }
+.health li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.health li:last-child { border-bottom: none; }
+.health .hi { font-size: 1.1rem; line-height: 1.3; }
+.health li button { margin-top: 6px; }
+.health-ok { color: var(--accent); font-weight: 700; margin: 0; }
+.health-bad { color: var(--warn); font-weight: 700; margin: 0; }
+.hijri { font-size: .82rem; color: var(--accent); display: inline-flex; align-items: center; gap: 2px; }
+.info-btn.small-info { width: 18px; height: 18px; font-size: .7rem; margin-left: 4px; }
+
+/* ---- View Transitions for day/month changes (v1.6) ---- */
+.day-pane { view-transition-name: day-pane; }
+.nav-label { view-transition-name: day-label; }
+::view-transition-group(day-pane) { animation-duration: .25s; }
+html[data-vt="day-next"]::view-transition-old(day-pane) { animation: vtOut .18s ease-in both; --vt-x: -40px; }
+html[data-vt="day-next"]::view-transition-new(day-pane) { animation: vtIn .22s ease-out both; --vt-x: 40px; }
+html[data-vt="day-prev"]::view-transition-old(day-pane) { animation: vtOut .18s ease-in both; --vt-x: 40px; }
+html[data-vt="day-prev"]::view-transition-new(day-pane) { animation: vtIn .22s ease-out both; --vt-x: -40px; }
+html[data-vt="month-next"]::view-transition-old(day-pane) { animation: vtOutScale .3s ease-in both; --vt-x: -100%; }
+html[data-vt="month-next"]::view-transition-new(day-pane) { animation: vtInScale .5s cubic-bezier(.2,.8,.2,1) both; --vt-x: 100%; }
+html[data-vt="month-prev"]::view-transition-old(day-pane) { animation: vtOutScale .3s ease-in both; --vt-x: 100%; }
+html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale .5s cubic-bezier(.2,.8,.2,1) both; --vt-x: -100%; }
+@keyframes vtOut { to { transform: translateX(var(--vt-x)); opacity: 0; } }
+@keyframes vtIn { from { transform: translateX(var(--vt-x)); opacity: 0; } }
+@keyframes vtOutScale { to { transform: translateX(var(--vt-x)) scale(.92); opacity: 0; } }
+@keyframes vtInScale { from { transform: translateX(var(--vt-x)) scale(.92); opacity: 0; } }
+
+/* ---- Qibla compass (v1.6) ---- */
+.qibla { text-align: center; }
+.qibla-facts { margin: 0 0 10px; }
+.compass { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 10px auto 14px; }
+.compass .dial { width: 100%; height: 100%; transition: transform .15s linear; }
+.compass-pointer { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0;
+  border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 16px solid var(--accent); z-index: 1; }
+.dial .ring { fill: var(--card); stroke: var(--border); stroke-width: 2; }
+.dial .tick { stroke: var(--muted); stroke-width: 1; }
+.dial .tick.major { stroke: var(--text); stroke-width: 2; }
+.dial text { fill: var(--muted); font-size: 16px; font-weight: 700; text-anchor: middle; font-family: system-ui, sans-serif; }
+.dial text.north { fill: var(--bad); }
+.dial .qibla-line { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.dial .kaaba { fill: #1c2321; stroke: #f3c56b; stroke-width: 1.5; }
+.dial .kaaba-band { fill: #f3c56b; }
+.compass-status { font-weight: 700; min-height: 1.4em; }
+.qibla.aligned .compass-status { color: var(--accent); }
+.qibla.aligned .ring { stroke: var(--accent); stroke-width: 4; }
+.calibrate { text-align: left; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin-top: 12px; }
+.tabs button span { white-space: nowrap; }

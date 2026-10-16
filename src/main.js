@@ -9,11 +9,16 @@ import {
 } from './store.js';
 import {
   rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative, SOUND_OPTIONS,
+  notificationFacts,
 } from './notify.js';
 import { validateSchedule, rowProblems } from './ocr/correct.js';
 import { withEstimates } from './estimate.js';
 import { shareCalendar } from './share.js';
 import { addDays, sameDay, dayRow, step } from './daynav.js';
+import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
+import { healthItems } from './health.js';
+import { hijriDate } from './hijri.js';
+import { qiblaBearing, distanceKm, headingFromEvent, turnBy, compassWord } from './qibla.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
@@ -44,8 +49,10 @@ function show(view) {
 
 function render() {
   app.replaceChildren();
+  stopCompass?.();
   if (state.view === 'home') renderHome();
   else if (state.view === 'import') renderImport();
+  else if (state.view === 'qibla') renderQibla();
   else renderSettings();
 }
 
@@ -123,6 +130,7 @@ function renderHome() {
   if (isToday) renderBanners(app);
 
   const wd = WEEKDAYS_SV[weekday(date.year, date.month, date.day)];
+  const hijri = hijriDate(date, state.settings.hijriOffset ?? 0);
   const prevStep = step(shown, date, -1);
   const nextStep = step(shown, date, 1);
   const nav = h(`<div class="day-nav">
@@ -130,21 +138,23 @@ function renderHome() {
     <div class="nav-label">
       <span class="nav-day">${isToday ? 'Idag' : `${wd} ${date.day} ${MONTHS_SV[date.month - 1]}`}</span>
       ${isToday ? `<span class="muted">${wd} ${date.day} ${MONTHS_SV[date.month - 1]}</span>` : '<button class="link" data-a="today">Till idag</button>'}
+      ${hijri ? `<span class="hijri">${esc(hijri)} <button class="info-btn small-info" data-a="hijri-info" aria-label="Om hijri-datumet">i</button></span>` : ''}
     </div>
     <button class="nav-arrow" data-dir="1" aria-label="Nästa dag" ${nextStep ? '' : 'disabled'}>›</button>
   </div>`);
   nav.querySelectorAll('.nav-arrow').forEach((b) => { b.onclick = () => moveDay(+b.dataset.dir); });
+  nav.querySelector('[data-a=hijri-info]')?.addEventListener('click', showHijriInfo);
   nav.querySelector('[data-a=today]')?.addEventListener('click', () => {
     const back = date.year * 10000 + date.month * 100 + date.day > today.year * 10000 + today.month * 100 + today.day;
-    state.anim = sameMonth(date, today) ? 'fade' : `month-${back ? 'prev' : 'next'}`;
     state.viewDate = null;
-    render();
+    animateTo(sameMonth(date, today) ? 'fade' : `month-${back ? 'prev' : 'next'}`);
   });
   app.append(nav);
 
   const pane = h('<div class="day-pane"></div>');
   if (state.anim) {
-    pane.classList.add(`anim-${state.anim}`);
+    // With View Transitions the browser animates; otherwise fall back to CSS classes.
+    if (!state.viewTransition) pane.classList.add(`anim-${state.anim}`);
     if (state.anim.startsWith('month')) pane.append(h(`<div class="month-chip">${monthLabel(date.year, date.month)}</div>`));
     state.anim = null;
   }
@@ -234,8 +244,20 @@ function moveDay(dir) {
     return;
   }
   state.viewDate = sameDay(r.to, today) ? null : r.to;
-  state.anim = `${r.kind}-${dir > 0 ? 'next' : 'prev'}`;
-  render();
+  animateTo(`${r.kind}-${dir > 0 ? 'next' : 'prev'}`);
+}
+
+// Day/month change: View Transitions where supported (Chrome/Android WebView 111+,
+// iOS 18+), else the CSS slide animations. Respects "reduce motion".
+function animateTo(anim) {
+  state.anim = anim;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!document.startViewTransition || reduce) { render(); return; }
+  const root = document.documentElement;
+  root.dataset.vt = anim;
+  state.viewTransition = true;
+  const t = document.startViewTransition(() => render());
+  t.finished.finally(() => { delete root.dataset.vt; state.viewTransition = false; });
 }
 
 // Horizontal swipe on the "Idag" tab changes day.
@@ -305,12 +327,12 @@ function renderImport() {
     <div class="progress-box" hidden>
       <img class="thumb" alt="" />
       <div class="progress-info">
-        <div class="msg">Förbereder…</div>
+        <div class="msg" role="status" aria-live="polite">Förbereder…</div>
         <div class="bar"><span></span></div>
         <div class="muted pct"></div>
       </div>
     </div>
-    <div class="error"></div>
+    <div class="error" role="alert"></div>
     <p class="muted small-text">Tips: en rak, skarp bild där hela tabellen syns ger bäst resultat.</p>
     <button class="secondary" data-a="manual">Skriv in manuellt istället</button>
   </section>`);
@@ -386,9 +408,9 @@ function renderReview() {
       <br><span style="background:var(--bad-bg);color:var(--bad)">röd</span>osäker – kontrollera mot bilden
       <br>Tryck på en tid för att ändra eller bekräfta den.
     </p>
-    <div class="check-bar"></div>
+    <div class="check-bar" role="status" aria-live="polite"></div>
     <div class="review-wrap"><table class="review"><thead><tr><th></th>${PRAYERS.map((p) => `<th>${p.name}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
-    <div class="issues"></div>
+    <div class="issues" role="alert"></div>
     <div class="row" style="margin-top:12px"><button data-a="save">Spara schema</button><button class="secondary" data-a="cancel">Avbryt</button></div>
   </section>`);
   if (d.image) card.querySelector('img.preview').src = d.image;
@@ -444,6 +466,10 @@ function renderReview() {
       const btn = tbody.querySelector(`[data-cell="${i}-${k}"]`);
       btn.textContent = d.days[i][k] == null ? '––:––' : fmt(d.days[i][k]);
       btn.className = cellClass(i, k);
+      // Colour alone does not reach screen readers: say what the cell is and its state.
+      const state = btn.className.includes('uncertain') || btn.className.includes('invalid') ? ', osäker – kontrollera'
+        : btn.className.includes('corrected') ? ', automatiskt rättad' : '';
+      btn.setAttribute('aria-label', `${PRAYERS[k].name} ${WEEKDAYS_SV[weekday(d.year, d.month, i + 1)]} ${i + 1} ${MONTHS_SV[d.month - 1]}: ${d.days[i][k] == null ? 'saknas' : fmt(d.days[i][k])}${state}`);
     }
     updateCheckBar();
   };
@@ -452,7 +478,9 @@ function renderReview() {
     const flag = d.flags[i][c];
     const near = (k) => (d.days[k]?.[c] != null ? fmt(d.days[k][c]) : '–');
     const raw = d.raw?.[i]?.[c];
-    const why = flag === 'corrected'
+    const why = !d.raw && !d.existing && d.days[i][c] == null
+      ? 'Skriv in tiden från moskéns schema.'
+      : flag === 'corrected'
       ? `Appen läste ${raw ? `"${esc(raw)}"` : 'något oklart'} och rättade det automatiskt. Stämmer tiden med bilden?`
       : flag === 'uncertain'
         ? `Appen kunde inte läsa tiden säkert${raw ? ` (läste "${esc(raw)}")` : ''}. Värdet nedan är en uppskattning – kontrollera mot bilden.`
@@ -524,7 +552,104 @@ function renderReview() {
   app.append(card);
 }
 
+// ---------------------------------------------------------------- qibla
+
+let stopCompass = null;
+
+function renderQibla() {
+  const bearing = qiblaBearing();
+  const card = h(`<section class="card qibla">
+    <h2>Qibla från Karlstad</h2>
+    <p class="qibla-facts"><b>${Math.round(bearing)}°</b> från norr (${compassWord(bearing)}) · ${Math.round(distanceKm()).toLocaleString('sv-SE')} km till Mecka</p>
+    <div class="compass" aria-hidden="true">
+      <div class="compass-pointer"></div>
+      <svg class="dial" viewBox="-100 -100 200 200">
+        <circle r="96" class="ring" />
+        ${Array.from({ length: 72 }, (_, i) => `<line class="${i % 18 === 0 ? 'tick major' : 'tick'}" x1="0" y1="-96" x2="0" y2="${i % 18 === 0 ? -84 : -90}" transform="rotate(${i * 5})" />`).join('')}
+        ${[['N', 0], ['Ö', 90], ['S', 180], ['V', 270]].map(([t, a]) => `<text class="${t === 'N' ? 'north' : ''}" transform="rotate(${a}) translate(0 -70) rotate(${-a})" dy="6">${t}</text>`).join('')}
+        <g transform="rotate(${bearing})">
+          <line class="qibla-line" x1="0" y1="0" x2="0" y2="-60" />
+          <g transform="translate(0 -60)"><rect class="kaaba" x="-9" y="-9" width="18" height="18" rx="2" /><rect class="kaaba-band" x="-9" y="-4" width="18" height="3" /></g>
+        </g>
+      </svg>
+    </div>
+    <p class="compass-status" role="status" aria-live="polite">Tryck på knappen för att starta kompassen.</p>
+    <button data-a="start">Starta kompassen</button>
+    <div class="calibrate muted small-text">
+      <b>För bästa resultat:</b> håll telefonen plant framför dig och håll dig borta från metall,
+      magneter och elektronik (även magnetiska mobilskal). Om riktningen hoppar: rör telefonen i
+      en liggande åtta några gånger för att kalibrera kompassen.
+    </div>
+    <p class="muted small-text">Riktningen räknas från Karlstads koordinater – ingen platsåtkomst behövs.
+      Kompassens noggrannhet är ofta ±5–10°.</p>
+  </section>`);
+  const dial = card.querySelector('.dial');
+  const statusEl = card.querySelector('.compass-status');
+  const startBtn = card.querySelector('[data-a=start]');
+  let aligned = false;
+
+  const onOrientation = (e) => {
+    const heading = headingFromEvent(e, screen.orientation?.angle ?? 0);
+    if (heading == null) return;
+    gotEvent = true;
+    // Unwrap the angle so passing north (359° → 1°) does not spin the dial a full turn.
+    rotation += ((-heading - rotation + 540) % 360) - 180;
+    dial.style.transform = `rotate(${rotation}deg)`;
+    const turn = turnBy(heading, bearing);
+    const nowAligned = Math.abs(turn) <= 5;
+    card.classList.toggle('aligned', nowAligned);
+    if (nowAligned && !aligned) navigator.vibrate?.(60);
+    aligned = nowAligned;
+    statusEl.textContent = nowAligned
+      ? '✓ Du är vänd mot Qibla.'
+      : `Vrid dig ${Math.abs(Math.round(turn))}° åt ${turn > 0 ? 'höger' : 'vänster'}.`;
+  };
+  let gotEvent = false;
+  let rotation = 0;
+  const eventName = 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
+
+  startBtn.onclick = async () => {
+    try {
+      // iPhone asks for permission to read the motion sensors (must follow a tap).
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res !== 'granted') { statusEl.textContent = 'Kompassen fick inte åtkomst till rörelsesensorn. Du kan tillåta det i telefonens inställningar.'; return; }
+      }
+    } catch { /* not supported – fall through */ }
+    window.addEventListener(eventName, onOrientation);
+    stopCompass = () => { window.removeEventListener(eventName, onOrientation); stopCompass = null; };
+    startBtn.hidden = true;
+    statusEl.textContent = 'Söker kompass…';
+    setTimeout(() => {
+      if (!gotEvent) {
+        statusEl.textContent = `Ingen kompass hittades i den här enheten. Använd en vanlig kompass: vänd dig ${Math.round(bearing)}° (${compassWord(bearing)}).`;
+        startBtn.hidden = false;
+      }
+    }, 2500);
+  };
+  app.append(card);
+}
+
 // ---------------------------------------------------------------- settings
+
+function showHijriInfo() {
+  const dlg = h(`<dialog class="editor info">
+    <form method="dialog">
+      <h3>Hijri-datum</h3>
+      <p>Datumet räknas ut i telefonen med den islamiska kalendern <b>Umm al-Qura</b> (samma som i
+        Saudiarabien) – utan internet.</p>
+      <p><b>Kan skilja en dag:</b> många moskéer, även i Sverige, börjar en ny månad först när nymånen
+        har setts. Då kan datumet här vara en dag före eller efter. Under Inställningar kan du justera
+        det med ±1 eller ±2 dagar.</p>
+      <p class="muted">Den islamiska dagen börjar vid solnedgången (Maghrib), men datumet här byter vid
+        midnatt, som kalendern i övrigt.</p>
+      <div class="row"><button value="ok">Stäng</button></div>
+    </form>
+  </dialog>`);
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+}
 
 function showEstimateInfo() {
   const dlg = h(`<dialog class="editor info">
@@ -553,9 +678,50 @@ function showEstimateInfo() {
 }
 
 
+// "Fungerar notiserna?" – one line per thing that can stop or delay a prayer notification.
+async function renderHealth(box) {
+  box.replaceChildren(h('<p class="muted">Kontrollerar…</p>'));
+  const f = await notificationFacts();
+  if (!f.native) {
+    box.replaceChildren(h('<p class="muted">Kontrollen fungerar bara i den installerade appen.</p>'));
+    return;
+  }
+  const today = nowInStockholm();
+  const shown = withEstimates(state.schedules, state.settings, today);
+  const hasToday = !!shown[monthKey(today.year, today.month)];
+  const battery = f.platform === 'android' ? await batteryStatus() : null;
+  const recheck = () => refreshNotifications().then(() => renderHealth(box));
+  const ACTIONS = {
+    'notification-settings': ['Öppna notisinställningar', openNotificationSettings],
+    'exact-alarms': ['Tillåt exakta alarm', openExactAlarmSettings],
+    'battery-settings': ['Öppna batteriinställningar', openBatterySettings],
+    'add-schedule': ['Lägg till schema', () => show('import')],
+  };
+  const items = healthItems(f, battery, hasToday).map((it) => ({ ...it, action: ACTIONS[it.action] }));
+  const list = h('<ul class="health"></ul>');
+  for (const it of items) {
+    const li = h(`<li class="${it.ok ? 'ok' : 'bad'}"><span class="hi" aria-hidden="true">${it.ok ? '✅' : '⚠️'}</span>
+      <span><b>${esc(it.text)}</b>${it.ok && it.note ? `<br><small class="muted">${esc(it.note)}</small>` : ''}</span></li>`);
+    if (!it.ok && it.action) {
+      const b = h(`<button class="secondary small">${esc(it.action[0])}</button>`);
+      b.onclick = async () => { await it.action[1](); setTimeout(recheck, 800); };
+      li.querySelector('span:last-child').append(h('<br>'), b);
+    }
+    list.append(li);
+  }
+  const allOk = items.every((i) => i.ok);
+  box.replaceChildren(
+    h(`<p class="${allOk ? 'health-ok' : 'health-bad'}">${allOk ? 'Allt ser bra ut – notiserna bör komma i tid.' : 'Något kan hindra notiserna:'}</p>`),
+    list,
+    h('<p class="muted small-text">Tänk också på att Stör ej och tyst läge kan dölja ljudet.</p>'),
+  );
+}
+
 function renderSettings() {
   const s = state.settings;
-  const card = h(`<div><section class="card"><h2>Notiser</h2><div class="prayers"></div>
+  const card = h(`<div><section class="card"><h2>Fungerar notiserna?</h2><div class="health-box" role="status" aria-live="polite"></div>
+    <button class="secondary small" data-a="recheck">Kontrollera igen</button></section>
+    <section class="card"><h2>Notiser</h2><div class="prayers"></div>
     <div class="toggle"><span>Ljud vid bönetiden</span>
       <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
     <div class="row sound-row"><button class="secondary small" data-a="listen">▶ Lyssna</button>
@@ -563,12 +729,14 @@ function renderSettings() {
     <div class="toggle"><span>Extra påminnelse innan<br><small class="muted">Notisen vid bönetiden kommer alltid också</small></span>
       <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Ingen'}</option>`).join('')}</select></div>
     <label class="toggle"><span>Påminn när schemat håller på att gå ut</span><input type="checkbox" data-f="reminders" ${s.reminders ? 'checked' : ''}/></label>
+    <div class="toggle"><span>Justera hijri-datum<br><small class="muted">Om moskén följer månsyn</small></span>
+      <select data-f="hijri">${[-2, -1, 0, 1, 2].map((n) => `<option value="${n}" ${n === (s.hijriOffset ?? 0) ? 'selected' : ''}>${n === 0 ? 'Ingen justering' : `${n > 0 ? '+' : '−'}${Math.abs(n)} dag${Math.abs(n) === 1 ? '' : 'ar'}`}</option>`).join('')}</select></div>
     <div class="toggle"><span>Beräknade tider (nödläge)
         <button type="button" class="info-btn" data-a="estimate-info" aria-label="Om beräknade tider">i</button>
         <br><small class="muted">Bara när moskéns schema saknas</small></span>
       <input type="checkbox" data-f="estimate" ${s.estimate ? 'checked' : ''}/></div>
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
-    <p class="muted msg"></p>
+    <p class="muted msg" role="status" aria-live="polite"></p>
   </section>
   <section class="card"><h2>Om notiserna</h2><p class="muted">
     Notiser skapas bara för datum som finns i ett inlagt schema. När ett schema gått ut skickas inga bönenotiser
@@ -602,12 +770,20 @@ function renderSettings() {
   };
   card.querySelector('[data-f=reminders]').onchange = (e) => { s.reminders = e.target.checked; persist(); };
   card.querySelector('[data-a=estimate-info]').onclick = () => showEstimateInfo();
+  card.querySelector('[data-f=hijri]').onchange = async (e) => {
+    s.hijriOffset = +e.target.value;
+    await saveSettings(s);
+    msg.textContent = `Hijri-datum: ${hijriDate(nowInStockholm(), s.hijriOffset) ?? '–'}`;
+  };
   card.querySelector('[data-f=estimate]').onchange = (e) => {
     if (e.target.checked && !confirm('Beräknade tider kan avvika från moskéns tider – särskilt Fajr och Isha på sommaren. '
       + 'Använd dem bara när moskéns schema saknas. Slå på ändå?')) { e.target.checked = false; return; }
     s.estimate = e.target.checked;
     persist();
   };
+  const healthBox = card.querySelector('.health-box');
+  renderHealth(healthBox);
+  card.querySelector('[data-a=recheck]').onclick = async () => { await refreshNotifications(); renderHealth(healthBox); };
   card.querySelector('[data-a=test]').onclick = async () => {
     msg.textContent = (await testNotification(s)) ? 'Testnotis kommer om 5 sekunder.' : 'Notiser fungerar bara i appen och kräver tillstånd.';
   };
@@ -627,7 +803,8 @@ async function init() {
   App.addListener('appStateChange', async ({ isActive }) => {
     if (!isActive) return;
     await refreshNotifications();
-    if (state.view === 'home') render();
+    // Back from the system settings: home and the notification check show fresh status.
+    if (state.view === 'home' || state.view === 'settings') render();
   }).catch(() => {});
   setInterval(() => { if (state.view === 'home') render(); }, 30_000);
 }

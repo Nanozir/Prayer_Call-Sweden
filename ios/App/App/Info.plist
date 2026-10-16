@@ -8,6 +8,8 @@
 	<string>en</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Kameran används för att fotografera moskéns schema. Bilden läses bara i telefonen.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Rörelsesensorn används bara för kiblakompassen.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Bilder används för att läsa in moskéns schema. Bilden läses bara i telefonen.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

@@ -24,6 +24,7 @@ const page = await browser.newPage({ viewport: { width: 400, height: 860 } });
 page.on('pageerror', (e) => console.error('pageerror', e));
 const cspViolations = [];
 page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text()); });
+if (process.env.NO_VIEW_TRANSITIONS) await page.addInitScript(() => { delete Document.prototype.startViewTransition; });
 await page.addInitScript(() => {
   // Freeze "today" at 8 Oct 2026 08:13 Stockholm time.
   const fixed = new Date('2026-10-08T06:13:00Z').getTime();
@@ -44,16 +45,24 @@ let wrong = 0;
 fx.truth.forEach((row, i) => row.forEach((v, c) => { if (values[i]?.[c] !== v) { wrong++; console.log(`day ${i + 1} col ${c}: got ${values[i]?.[c]} want ${v}`); } }));
 const flagged = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
 
-// Edit dialog: "Gå till nästa" opens the first flagged cell; change it and save.
-await page.click('.check-bar button');
+// Accessibility: the counter is announced, cells carry a descriptive label.
+const live = await page.$eval('.check-bar', (e) => e.getAttribute('aria-live'));
+const label = await page.$eval('[data-cell="0-3"]', (b) => b.getAttribute('aria-label'));
+if (live !== 'polite' || !/^Asr Tors 1 oktober: 15:48/.test(label)) { console.log('FAIL: a11y', live, label); process.exit(1); }
+
+// Edit dialog: open a cell (the first flagged one if any), change it and save.
+const hasFlags = flagged > 0;
+if (hasFlags) await page.click('.check-bar button'); else await page.click('[data-cell="12-3"]');
 await page.waitForSelector('dialog.editor[open]');
-const [fi, fc] = (await page.$eval('table.review .cell.corrected, table.review .cell.uncertain', (b) => b.dataset.cell)).split('-').map(Number);
+const [fi, fc] = hasFlags
+  ? (await page.$eval('table.review .cell.corrected, table.review .cell.uncertain', (b) => b.dataset.cell)).split('-').map(Number)
+  : [12, 3];
 await page.fill('dialog.editor input[type=time]', '15:34');
 await page.click('dialog.editor [value=save]');
 const edited = await page.$eval(`[data-cell="${fi}-${fc}"]`, (b) => ({ text: b.textContent, cls: b.className }));
 if (edited.text !== '15:34' || edited.cls !== 'cell') { console.log('FAIL: edit dialog did not update the cell', edited); process.exit(1); }
 const remaining = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
-if (remaining !== flagged - 1) { console.log('FAIL: flag not cleared'); process.exit(1); }
+if (remaining !== Math.max(0, flagged - 1)) { console.log('FAIL: flag not cleared'); process.exit(1); }
 // Put the true value back so the saved schedule matches the fixture.
 await page.click(`[data-cell="${fi}-${fc}"]`);
 await page.fill('dialog.editor input[type=time]', fx.truth[fi][fc]);
@@ -65,6 +74,13 @@ await page.click('[data-a=save]');
 await page.waitForSelector('.hero');
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/home.png`, fullPage: true });
 
+// Hijri date under today's date, with an info dialog.
+const hijri = await page.$eval('.hijri', (e) => e.textContent.trim());
+if (!/^27 Rabi’ al-akhir 1448/.test(hijri)) { console.log('FAIL: hijri date', hijri); process.exit(1); }
+await page.click('[data-a=hijri-info]');
+await page.waitForSelector('dialog.info[open]');
+await page.click('dialog.info [value=ok]');
+
 // Day browsing: swipe (synthetic touch) and arrows, up to the end of the schedule.
 const swipe = (dx) => page.evaluate((dx) => {
   const el = document.getElementById('app');
@@ -72,21 +88,37 @@ const swipe = (dx) => page.evaluate((dx) => {
   el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(200)], bubbles: true }));
   el.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(200 + dx)], bubbles: true }));
 }, dx);
+const vtSupported = await page.evaluate(() => {
+  if (!document.startViewTransition) return false;
+  const orig = document.startViewTransition.bind(document);
+  window.__vt = [];
+  document.startViewTransition = (cb) => { window.__vt.push(document.documentElement.dataset.vt); return orig(cb); };
+  return true;
+});
 await swipe(-120); // left = next day
+await page.waitForTimeout(400);
 const tomorrow = await page.$eval('.nav-day', (e) => e.textContent);
 if (!/9 oktober/.test(tomorrow)) { console.log('FAIL: swipe did not go to the next day:', tomorrow); process.exit(1); }
 const fajr9 = await page.$eval('.prayer .p-time', (e) => e.textContent);
 if (fajr9 !== fx.truth[8][0]) { console.log('FAIL: wrong times for 9 Oct', fajr9); process.exit(1); }
 await swipe(120); // back to today
+await page.waitForTimeout(400);
 if (await page.$eval('.nav-day', (e) => e.textContent) !== 'Idag') { console.log('FAIL: swipe back'); process.exit(1); }
-for (let i = 0; i < 24; i++) await page.click('.nav-arrow[data-dir="1"]');
+for (let i = 0; i < 24; i++) { await page.click('.nav-arrow[data-dir="1"]'); await page.waitForTimeout(60); }
+await page.waitForTimeout(600);
 const end = await page.$eval('.no-schedule h2', (e) => e.textContent).catch(() => null);
 const nextDisabled = await page.$eval('.nav-arrow[data-dir="1"]', (b) => b.disabled);
 if (end !== 'Inget schema för november 2026' || !nextDisabled) { console.log('FAIL: end of schedule', end, nextDisabled); process.exit(1); }
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/no-schedule.png` });
 await page.click('.nav-arrow[data-dir="-1"]');
+await page.waitForTimeout(600);
 if (!/31 oktober/.test(await page.$eval('.nav-day', (e) => e.textContent))) { console.log('FAIL: back into October'); process.exit(1); }
 if (process.env.SHOT_DIR) { await page.waitForTimeout(150); await page.screenshot({ path: `${process.env.SHOT_DIR}/month-anim.png` }); }
+if (vtSupported) {
+  const kinds = await page.evaluate(() => window.__vt);
+  if (!kinds.includes('day-next') || !kinds.includes('month-next') || !kinds.includes('month-prev')) { console.log('FAIL: view transitions', kinds); process.exit(1); }
+  console.log('View Transitions used:', [...new Set(kinds)].join(', '));
+}
 console.log('Day browsing OK');
 await browser.close();
 server.close();

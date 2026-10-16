@@ -29,3 +29,21 @@ test('detects month and year from noisy header', () => {
   assert.deepEqual(detectMonthYear('B0NETIDER FÖR novmber 2025'), { year: 2025, month: 11 });
   assert.deepEqual(detectMonthYear('nothing here'), { year: null, month: null });
 });
+
+test('flags a 2-minute misread that a loose check would accept', () => {
+  const raw = fx.ocrSample.map((l) => l.split(' '));
+  raw[16][0] = '0531'; // true 05:33 – plausible-looking but wrong
+  raw[3][2] = '1259'; // true 12:55
+  const { days, flags } = correctTable(raw, fx.year, fx.month);
+  assert.notEqual(flags[16][0], 'ok');
+  assert.notEqual(flags[3][2], 'ok');
+  assert.equal(fmt(days[3][2]), '12:55');
+});
+
+test('uses an alternative reading when the primary one does not fit', () => {
+  const raw = fx.ocrSample.map((l) => l.split(' '));
+  raw[10][3] = ['1586', '15:26']; // primary misread, second clean-up read it right
+  const { days, flags } = correctTable(raw, fx.year, fx.month);
+  assert.equal(fmt(days[10][3]), '15:26');
+  assert.equal(flags[10][3], 'corrected');
+});
