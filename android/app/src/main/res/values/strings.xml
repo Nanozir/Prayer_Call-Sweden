@@ -4,4 +4,9 @@
     <string name="title_activity_main">Salah-kalender</string>
     <string name="package_name">se.salahkalender.app</string>
     <string name="custom_url_scheme">se.salahkalender.app</string>
+    <string name="widget_label">Nästa bön</string>
+    <string name="widget_label_estimated">Nästa bön (beräknad)</string>
+    <string name="widget_no_schedule">Inget schema – öppna appen</string>
+    <string name="widget_countdown_format">om %s</string>
+    <string name="widget_description">Nästa bönetid med nedräkning</string>
 </resources>

@@ -7,6 +7,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { PRAYERS, stockholmToDate, monthLabel, MONTHS_SV } from './time.js';
 import { coverageEnd, scheduleStatus } from './store.js';
 import { withEstimates } from './estimate.js';
+import { updateWidget } from './native.js';
 
 // Android ties sound to the notification channel (fixed once created), so each
 // sound choice gets its own channel. Sound files live in android/.../res/raw.
@@ -140,7 +141,9 @@ export async function rescheduleAll(schedules, settings) {
   }
 
   const now = new Date();
-  const prayers = prayerNotifications(withEstimates(schedules, settings), settings, now);
+  const effective = withEstimates(schedules, settings);
+  await updateWidget({ prayers: widgetPrayers(effective, now) });
+  const prayers = prayerNotifications(effective, settings, now);
   const list = [...prayers, ...(settings.reminders ? reminderNotifications(schedules, now, settings) : [])];
   if (list.length) await LocalNotifications.schedule({ notifications: list });
   return { scheduled: list.length, native: true, exact: perms.exact, until: prayers.at(-1)?.schedule.at };
@@ -158,6 +161,31 @@ export async function testNotification(settings) {
     }],
   });
   return true;
+}
+
+/**
+ * The coming prayers (Shuruk is sunrise, not a prayer) for the home-screen widget,
+ * from now and the next few days. Real and estimated schedules; estimated ones are marked.
+ */
+export function widgetPrayers(schedules, now = new Date(), days = 14) {
+  const out = [];
+  const limit = now.getTime() + days * 864e5;
+  for (const sched of Object.values(schedules)) {
+    sched.days.forEach((row, d) => {
+      row.forEach((minutes, p) => {
+        if (minutes == null || PRAYERS[p].key === 'shuruk') return;
+        const at = stockholmToDate(sched.year, sched.month, d + 1, minutes).getTime();
+        if (at <= now.getTime() || at > limit) return;
+        out.push({
+          name: PRAYERS[p].name,
+          at,
+          time: new Date(at).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' }),
+          estimated: !!sched.estimated,
+        });
+      });
+    });
+  }
+  return out.sort((a, b) => a.at - b.at);
 }
 
 /** Facts for the "Fungerar notiserna?" check in Settings. */

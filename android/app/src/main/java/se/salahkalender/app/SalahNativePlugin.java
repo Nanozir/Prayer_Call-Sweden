@@ -6,6 +6,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.content.SharedPreferences;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -42,6 +44,16 @@ public class SalahNativePlugin extends Plugin {
         Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
         startSettings(intent, call);
+    }
+
+    /** Stores the coming prayer times for the home-screen widget and redraws it. */
+    @PluginMethod
+    public void updateWidget(PluginCall call) {
+        JSArray prayers = call.getArray("prayers", new JSArray());
+        SharedPreferences prefs = getContext().getSharedPreferences(NextPrayerWidget.PREFS, Context.MODE_PRIVATE);
+        prefs.edit().putString(NextPrayerWidget.KEY, prayers.toString()).apply();
+        NextPrayerWidget.refresh(getContext());
+        call.resolve();
     }
 
     private void startSettings(Intent intent, PluginCall call) {

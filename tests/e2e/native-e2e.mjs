@@ -55,6 +55,9 @@ const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: J
   const atTime = asr.find((n) => /Det är dags/.test(n.title));
   check(new Date(atTime.schedule.at).toISOString() === '2026-10-08T13:33:00.000Z', 'Android: Asr 15:33 svensk tid = 13:33 UTC');
   check(atTime.channelId === 'prayer_adhan', 'Android: böneutrop-kanal används');
+  const widget = await page.evaluate(() => window.__mock.widget);
+  check(widget?.prayers?.[0]?.name === 'Dhohr' && widget.prayers[0].time === '12:54',
+    `Android: widgeten får nästa bön (${widget?.prayers?.[0]?.name} ${widget?.prayers?.[0]?.time})`);
 
   await page.click('nav button[data-view=settings]');
   await page.waitForSelector('.health li');

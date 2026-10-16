@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prayerNotifications } from '../src/notify.js';
+import { prayerNotifications, widgetPrayers } from '../src/notify.js';
 import { DEFAULT_SETTINGS } from '../src/store.js';
 
 // 1 Nov 2026: Fajr 05:06, Dhohr 11:49 (Stockholm, UTC+1)
@@ -33,4 +33,12 @@ test('sound choice selects the channel', () => {
   assert.deepEqual(ch('bells'), ['before_chime', 'prayer_bells']);
   assert.deepEqual(ch('off'), ['before_silent', 'prayer_silent']);
   assert.deepEqual(ch('adhan'), ['before_chime', 'prayer_adhan']);
+});
+
+test('widget gets the coming prayers without Shuruk, in order, with Swedish times', () => {
+  const list = widgetPrayers({ x: sched }, new Date('2026-11-01T05:00:00Z'), 1);
+  assert.deepEqual(list.slice(0, 2).map((p) => [p.name, p.time]), [['Dhohr', '11:49'], ['Asr', '13:40']]);
+  assert.ok(list.every((p) => p.name !== 'Shuruk'));
+  assert.ok(list.every((p, i) => i === 0 || p.at > list[i - 1].at));
+  assert.ok(list.at(-1).at <= new Date('2026-11-02T05:00:00Z').getTime());
 });
