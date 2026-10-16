@@ -143,15 +143,15 @@ function renderHome() {
   nav.querySelector('[data-a=hijri-info]')?.addEventListener('click', showHijriInfo);
   nav.querySelector('[data-a=today]')?.addEventListener('click', () => {
     const back = date.year * 10000 + date.month * 100 + date.day > today.year * 10000 + today.month * 100 + today.day;
-    state.anim = sameMonth(date, today) ? 'fade' : `month-${back ? 'prev' : 'next'}`;
     state.viewDate = null;
-    render();
+    animateTo(sameMonth(date, today) ? 'fade' : `month-${back ? 'prev' : 'next'}`);
   });
   app.append(nav);
 
   const pane = h('<div class="day-pane"></div>');
   if (state.anim) {
-    pane.classList.add(`anim-${state.anim}`);
+    // With View Transitions the browser animates; otherwise fall back to CSS classes.
+    if (!state.viewTransition) pane.classList.add(`anim-${state.anim}`);
     if (state.anim.startsWith('month')) pane.append(h(`<div class="month-chip">${monthLabel(date.year, date.month)}</div>`));
     state.anim = null;
   }
@@ -241,8 +241,20 @@ function moveDay(dir) {
     return;
   }
   state.viewDate = sameDay(r.to, today) ? null : r.to;
-  state.anim = `${r.kind}-${dir > 0 ? 'next' : 'prev'}`;
-  render();
+  animateTo(`${r.kind}-${dir > 0 ? 'next' : 'prev'}`);
+}
+
+// Day/month change: View Transitions where supported (Chrome/Android WebView 111+,
+// iOS 18+), else the CSS slide animations. Respects "reduce motion".
+function animateTo(anim) {
+  state.anim = anim;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!document.startViewTransition || reduce) { render(); return; }
+  const root = document.documentElement;
+  root.dataset.vt = anim;
+  state.viewTransition = true;
+  const t = document.startViewTransition(() => render());
+  t.finished.finally(() => { delete root.dataset.vt; state.viewTransition = false; });
 }
 
 // Horizontal swipe on the "Idag" tab changes day.

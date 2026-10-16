@@ -206,3 +206,20 @@ body { overflow-x: hidden; }
 .health-bad { color: var(--warn); font-weight: 700; margin: 0; }
 .hijri { font-size: .82rem; color: var(--accent); display: inline-flex; align-items: center; gap: 2px; }
 .info-btn.small-info { width: 18px; height: 18px; font-size: .7rem; margin-left: 4px; }
+
+/* ---- View Transitions for day/month changes (v1.6) ---- */
+.day-pane { view-transition-name: day-pane; }
+.nav-label { view-transition-name: day-label; }
+::view-transition-group(day-pane) { animation-duration: .25s; }
+html[data-vt="day-next"]::view-transition-old(day-pane) { animation: vtOut .18s ease-in both; --vt-x: -40px; }
+html[data-vt="day-next"]::view-transition-new(day-pane) { animation: vtIn .22s ease-out both; --vt-x: 40px; }
+html[data-vt="day-prev"]::view-transition-old(day-pane) { animation: vtOut .18s ease-in both; --vt-x: 40px; }
+html[data-vt="day-prev"]::view-transition-new(day-pane) { animation: vtIn .22s ease-out both; --vt-x: -40px; }
+html[data-vt="month-next"]::view-transition-old(day-pane) { animation: vtOutScale .3s ease-in both; --vt-x: -100%; }
+html[data-vt="month-next"]::view-transition-new(day-pane) { animation: vtInScale .5s cubic-bezier(.2,.8,.2,1) both; --vt-x: 100%; }
+html[data-vt="month-prev"]::view-transition-old(day-pane) { animation: vtOutScale .3s ease-in both; --vt-x: 100%; }
+html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale .5s cubic-bezier(.2,.8,.2,1) both; --vt-x: -100%; }
+@keyframes vtOut { to { transform: translateX(var(--vt-x)); opacity: 0; } }
+@keyframes vtIn { from { transform: translateX(var(--vt-x)); opacity: 0; } }
+@keyframes vtOutScale { to { transform: translateX(var(--vt-x)) scale(.92); opacity: 0; } }
+@keyframes vtInScale { from { transform: translateX(var(--vt-x)) scale(.92); opacity: 0; } }

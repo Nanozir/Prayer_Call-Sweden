@@ -24,6 +24,7 @@ const page = await browser.newPage({ viewport: { width: 400, height: 860 } });
 page.on('pageerror', (e) => console.error('pageerror', e));
 const cspViolations = [];
 page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) cspViolations.push(m.text()); });
+if (process.env.NO_VIEW_TRANSITIONS) await page.addInitScript(() => { delete Document.prototype.startViewTransition; });
 await page.addInitScript(() => {
   // Freeze "today" at 8 Oct 2026 08:13 Stockholm time.
   const fixed = new Date('2026-10-08T06:13:00Z').getTime();
@@ -87,21 +88,37 @@ const swipe = (dx) => page.evaluate((dx) => {
   el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(200)], bubbles: true }));
   el.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch(200 + dx)], bubbles: true }));
 }, dx);
+const vtSupported = await page.evaluate(() => {
+  if (!document.startViewTransition) return false;
+  const orig = document.startViewTransition.bind(document);
+  window.__vt = [];
+  document.startViewTransition = (cb) => { window.__vt.push(document.documentElement.dataset.vt); return orig(cb); };
+  return true;
+});
 await swipe(-120); // left = next day
+await page.waitForTimeout(400);
 const tomorrow = await page.$eval('.nav-day', (e) => e.textContent);
 if (!/9 oktober/.test(tomorrow)) { console.log('FAIL: swipe did not go to the next day:', tomorrow); process.exit(1); }
 const fajr9 = await page.$eval('.prayer .p-time', (e) => e.textContent);
 if (fajr9 !== fx.truth[8][0]) { console.log('FAIL: wrong times for 9 Oct', fajr9); process.exit(1); }
 await swipe(120); // back to today
+await page.waitForTimeout(400);
 if (await page.$eval('.nav-day', (e) => e.textContent) !== 'Idag') { console.log('FAIL: swipe back'); process.exit(1); }
-for (let i = 0; i < 24; i++) await page.click('.nav-arrow[data-dir="1"]');
+for (let i = 0; i < 24; i++) { await page.click('.nav-arrow[data-dir="1"]'); await page.waitForTimeout(60); }
+await page.waitForTimeout(600);
 const end = await page.$eval('.no-schedule h2', (e) => e.textContent).catch(() => null);
 const nextDisabled = await page.$eval('.nav-arrow[data-dir="1"]', (b) => b.disabled);
 if (end !== 'Inget schema för november 2026' || !nextDisabled) { console.log('FAIL: end of schedule', end, nextDisabled); process.exit(1); }
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/no-schedule.png` });
 await page.click('.nav-arrow[data-dir="-1"]');
+await page.waitForTimeout(600);
 if (!/31 oktober/.test(await page.$eval('.nav-day', (e) => e.textContent))) { console.log('FAIL: back into October'); process.exit(1); }
 if (process.env.SHOT_DIR) { await page.waitForTimeout(150); await page.screenshot({ path: `${process.env.SHOT_DIR}/month-anim.png` }); }
+if (vtSupported) {
+  const kinds = await page.evaluate(() => window.__vt);
+  if (!kinds.includes('day-next') || !kinds.includes('month-next') || !kinds.includes('month-prev')) { console.log('FAIL: view transitions', kinds); process.exit(1); }
+  console.log('View Transitions used:', [...new Set(kinds)].join(', '));
+}
 console.log('Day browsing OK');
 await browser.close();
 server.close();
