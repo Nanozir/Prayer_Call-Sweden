@@ -6,7 +6,7 @@ import { PRAYERS, stockholmToDate, monthLabel, fmt } from './time.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const utc = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
-const escapeText = (s) => s.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+export const escapeText = (s) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 
 // RFC 5545: lines longer than 75 octets are folded with CRLF + space.
 function fold(line) {
