@@ -3,6 +3,15 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.7.0] – 2026-10-16
+
+### Nytt
+- **Säkerhetskopia** under Inställningar: exportera alla scheman och inställningar till en fil och
+  importera dem igen, t.ex. på en ny telefon eller när du byter till Google Play-versionen.
+- **Google Play:** varje release innehåller nu även en `.aab`-fil för Google Play, och
+  `docs/google-play/` har en steg-för-steg-guide för internt test (familjen), butikstexter,
+  integritetspolicy, ikon och omslagsbild.
+
 ## [1.6.0] – 2026-10-16
 
 ### Nytt

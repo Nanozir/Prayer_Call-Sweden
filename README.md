@@ -25,6 +25,10 @@ Ladda ner senaste `Salah-kalender-vX.Y.Z.apk` under **Releases** på telefonen o
 (tillåt "installera okända appar"). Nya versioner installeras ovanpå den gamla, inlagda
 scheman behålls. Vad som ändrats står i [CHANGELOG.md](CHANGELOG.md).
 
+**Google Play (familjen):** se [docs/google-play/GUIDE.md](docs/google-play/GUIDE.md) – internt
+test för upp till 100 personer, med automatiska uppdateringar. Varje release innehåller även
+`Salah-kalender-vX.Y.Z-google-play.aab` för uppladdning.
+
 Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, och tillåt
 "Alarm och påminnelser" (exakta alarm) om appen ber om det.
 
