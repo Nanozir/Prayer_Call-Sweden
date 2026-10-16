@@ -204,3 +204,5 @@ body { overflow-x: hidden; }
 .health li button { margin-top: 6px; }
 .health-ok { color: var(--accent); font-weight: 700; margin: 0; }
 .health-bad { color: var(--warn); font-weight: 700; margin: 0; }
+.hijri { font-size: .82rem; color: var(--accent); display: inline-flex; align-items: center; gap: 2px; }
+.info-btn.small-info { width: 18px; height: 18px; font-size: .7rem; margin-left: 4px; }

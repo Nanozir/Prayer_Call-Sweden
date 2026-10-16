@@ -68,6 +68,13 @@ await page.click('[data-a=save]');
 await page.waitForSelector('.hero');
 if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/home.png`, fullPage: true });
 
+// Hijri date under today's date, with an info dialog.
+const hijri = await page.$eval('.hijri', (e) => e.textContent.trim());
+if (!/^27 Rabi’ al-akhir 1448/.test(hijri)) { console.log('FAIL: hijri date', hijri); process.exit(1); }
+await page.click('[data-a=hijri-info]');
+await page.waitForSelector('dialog.info[open]');
+await page.click('dialog.info [value=ok]');
+
 // Day browsing: swipe (synthetic touch) and arrows, up to the end of the schedule.
 const swipe = (dx) => page.evaluate((dx) => {
   const el = document.getElementById('app');

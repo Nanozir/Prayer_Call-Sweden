@@ -17,6 +17,7 @@ import { shareCalendar } from './share.js';
 import { addDays, sameDay, dayRow, step } from './daynav.js';
 import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
 import { healthItems } from './health.js';
+import { hijriDate } from './hijri.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
@@ -126,6 +127,7 @@ function renderHome() {
   if (isToday) renderBanners(app);
 
   const wd = WEEKDAYS_SV[weekday(date.year, date.month, date.day)];
+  const hijri = hijriDate(date, state.settings.hijriOffset ?? 0);
   const prevStep = step(shown, date, -1);
   const nextStep = step(shown, date, 1);
   const nav = h(`<div class="day-nav">
@@ -133,10 +135,12 @@ function renderHome() {
     <div class="nav-label">
       <span class="nav-day">${isToday ? 'Idag' : `${wd} ${date.day} ${MONTHS_SV[date.month - 1]}`}</span>
       ${isToday ? `<span class="muted">${wd} ${date.day} ${MONTHS_SV[date.month - 1]}</span>` : '<button class="link" data-a="today">Till idag</button>'}
+      ${hijri ? `<span class="hijri">${esc(hijri)} <button class="info-btn small-info" data-a="hijri-info" aria-label="Om hijri-datumet">i</button></span>` : ''}
     </div>
     <button class="nav-arrow" data-dir="1" aria-label="Nästa dag" ${nextStep ? '' : 'disabled'}>›</button>
   </div>`);
   nav.querySelectorAll('.nav-arrow').forEach((b) => { b.onclick = () => moveDay(+b.dataset.dir); });
+  nav.querySelector('[data-a=hijri-info]')?.addEventListener('click', showHijriInfo);
   nav.querySelector('[data-a=today]')?.addEventListener('click', () => {
     const back = date.year * 10000 + date.month * 100 + date.day > today.year * 10000 + today.month * 100 + today.day;
     state.anim = sameMonth(date, today) ? 'fade' : `month-${back ? 'prev' : 'next'}`;
@@ -531,6 +535,25 @@ function renderReview() {
 
 // ---------------------------------------------------------------- settings
 
+function showHijriInfo() {
+  const dlg = h(`<dialog class="editor info">
+    <form method="dialog">
+      <h3>Hijri-datum</h3>
+      <p>Datumet räknas ut i telefonen med den islamiska kalendern <b>Umm al-Qura</b> (samma som i
+        Saudiarabien) – utan internet.</p>
+      <p><b>Kan skilja en dag:</b> många moskéer, även i Sverige, börjar en ny månad först när nymånen
+        har setts. Då kan datumet här vara en dag före eller efter. Under Inställningar kan du justera
+        det med ±1 eller ±2 dagar.</p>
+      <p class="muted">Den islamiska dagen börjar vid solnedgången (Maghrib), men datumet här byter vid
+        midnatt, som kalendern i övrigt.</p>
+      <div class="row"><button value="ok">Stäng</button></div>
+    </form>
+  </dialog>`);
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+}
+
 function showEstimateInfo() {
   const dlg = h(`<dialog class="editor info">
     <form method="dialog">
@@ -609,6 +632,8 @@ function renderSettings() {
     <div class="toggle"><span>Extra påminnelse innan<br><small class="muted">Notisen vid bönetiden kommer alltid också</small></span>
       <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Ingen'}</option>`).join('')}</select></div>
     <label class="toggle"><span>Påminn när schemat håller på att gå ut</span><input type="checkbox" data-f="reminders" ${s.reminders ? 'checked' : ''}/></label>
+    <div class="toggle"><span>Justera hijri-datum<br><small class="muted">Om moskén följer månsyn</small></span>
+      <select data-f="hijri">${[-2, -1, 0, 1, 2].map((n) => `<option value="${n}" ${n === (s.hijriOffset ?? 0) ? 'selected' : ''}>${n === 0 ? 'Ingen justering' : `${n > 0 ? '+' : '−'}${Math.abs(n)} dag${Math.abs(n) === 1 ? '' : 'ar'}`}</option>`).join('')}</select></div>
     <div class="toggle"><span>Beräknade tider (nödläge)
         <button type="button" class="info-btn" data-a="estimate-info" aria-label="Om beräknade tider">i</button>
         <br><small class="muted">Bara när moskéns schema saknas</small></span>
@@ -648,6 +673,11 @@ function renderSettings() {
   };
   card.querySelector('[data-f=reminders]').onchange = (e) => { s.reminders = e.target.checked; persist(); };
   card.querySelector('[data-a=estimate-info]').onclick = () => showEstimateInfo();
+  card.querySelector('[data-f=hijri]').onchange = async (e) => {
+    s.hijriOffset = +e.target.value;
+    await saveSettings(s);
+    msg.textContent = `Hijri-datum: ${hijriDate(nowInStockholm(), s.hijriOffset) ?? '–'}`;
+  };
   card.querySelector('[data-f=estimate]').onchange = (e) => {
     if (e.target.checked && !confirm('Beräknade tider kan avvika från moskéns tider – särskilt Fajr och Isha på sommaren. '
       + 'Använd dem bara när moskéns schema saknas. Slå på ändå?')) { e.target.checked = false; return; }
