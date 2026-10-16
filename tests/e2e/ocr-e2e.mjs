@@ -44,16 +44,19 @@ let wrong = 0;
 fx.truth.forEach((row, i) => row.forEach((v, c) => { if (values[i]?.[c] !== v) { wrong++; console.log(`day ${i + 1} col ${c}: got ${values[i]?.[c]} want ${v}`); } }));
 const flagged = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
 
-// Edit dialog: "Gå till nästa" opens the first flagged cell; change it and save.
-await page.click('.check-bar button');
+// Edit dialog: open a cell (the first flagged one if any), change it and save.
+const hasFlags = flagged > 0;
+if (hasFlags) await page.click('.check-bar button'); else await page.click('[data-cell="12-3"]');
 await page.waitForSelector('dialog.editor[open]');
-const [fi, fc] = (await page.$eval('table.review .cell.corrected, table.review .cell.uncertain', (b) => b.dataset.cell)).split('-').map(Number);
+const [fi, fc] = hasFlags
+  ? (await page.$eval('table.review .cell.corrected, table.review .cell.uncertain', (b) => b.dataset.cell)).split('-').map(Number)
+  : [12, 3];
 await page.fill('dialog.editor input[type=time]', '15:34');
 await page.click('dialog.editor [value=save]');
 const edited = await page.$eval(`[data-cell="${fi}-${fc}"]`, (b) => ({ text: b.textContent, cls: b.className }));
 if (edited.text !== '15:34' || edited.cls !== 'cell') { console.log('FAIL: edit dialog did not update the cell', edited); process.exit(1); }
 const remaining = await page.$$eval('table.review .cell.corrected, table.review .cell.uncertain', (els) => els.length);
-if (remaining !== flagged - 1) { console.log('FAIL: flag not cleared'); process.exit(1); }
+if (remaining !== Math.max(0, flagged - 1)) { console.log('FAIL: flag not cleared'); process.exit(1); }
 // Put the true value back so the saved schedule matches the fixture.
 await page.click(`[data-cell="${fi}-${fc}"]`);
 await page.fill('dialog.editor input[type=time]', fx.truth[fi][fc]);

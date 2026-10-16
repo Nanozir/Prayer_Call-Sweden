@@ -4,7 +4,12 @@
 
 import { isDst, MONTHS_SV, daysInMonth } from '../time.js';
 
-const TOLERANCE = 4; // minutes a value may differ from what its neighbours predict
+// Minutes a value may differ from what its neighbours predict. Real schedules are
+// smooth: in the mosque's October table every time is within 0.5 min of the
+// average of the day before and after, so 1.5 min catches even 2-minute misreads.
+// At the start/end of a month the estimate is one-sided and less precise.
+const TOLERANCE = 1.5;
+const TOLERANCE_EDGE = 2;
 
 export function digitsOf(text) {
   return (text ?? '').replace(/[^0-9]/g, '');
@@ -30,25 +35,31 @@ function candidates(d) {
 }
 
 // Linear estimate for index i from the nearest trusted values on each side.
+// Returns { p, tol } – the prediction and how far a value may deviate from it.
 function predict(vals, good, i) {
   let a = i - 1, b = i + 1;
   while (a >= 0 && !good[a]) a--;
   while (b < vals.length && !good[b]) b++;
-  if (a >= 0 && b < vals.length) return vals[a] + ((vals[b] - vals[a]) * (i - a)) / (b - a);
+  if (a >= 0 && b < vals.length) {
+    // Interpolating over a gap of several days is less precise than between neighbours.
+    const tol = b - a === 2 ? TOLERANCE : TOLERANCE_EDGE;
+    return { p: vals[a] + ((vals[b] - vals[a]) * (i - a)) / (b - a), tol };
+  }
   // Extrapolate from two values on the same side.
   if (a >= 0) {
     let a2 = a - 1; while (a2 >= 0 && !good[a2]) a2--;
-    return a2 >= 0 ? vals[a] + ((vals[a] - vals[a2]) * (i - a)) / (a - a2) : vals[a];
+    return { p: a2 >= 0 ? vals[a] + ((vals[a] - vals[a2]) * (i - a)) / (a - a2) : vals[a], tol: TOLERANCE_EDGE };
   }
   if (b < vals.length) {
     let b2 = b + 1; while (b2 < vals.length && !good[b2]) b2++;
-    return b2 < vals.length ? vals[b] - ((vals[b2] - vals[b]) * (b - i)) / (b2 - b) : vals[b];
+    return { p: b2 < vals.length ? vals[b] - ((vals[b2] - vals[b]) * (b - i)) / (b2 - b) : vals[b], tol: TOLERANCE_EDGE };
   }
   return null;
 }
 
 /**
- * rawRows: array (one per day) of 6 OCR strings.
+ * rawRows: array (one per day) of 6 OCR results. Each result is a string, or an
+ * array of alternative readings of the same cell (first = primary reading).
  * Returns {days, flags} where days[i][c] is minutes (Stockholm time) or null and
  * flags[i][c] is 'ok' | 'corrected' | 'uncertain'.
  */
@@ -59,7 +70,8 @@ export function correctTable(rawRows, year, month) {
   const flags = rawRows.map(() => new Array(6).fill('ok'));
 
   for (let c = 0; c < 6; c++) {
-    const digits = rawRows.map((r) => digitsOf(r[c]));
+    const readings = rawRows.map((r) => (Array.isArray(r[c]) ? r[c] : [r[c]]).map(digitsOf));
+    const digits = readings.map((alts) => alts[0]);
     // Work in standard time so the DST jump does not look like an error.
     const vals = digits.map((d, i) => {
       let v = digitsToMinutes(d);
@@ -70,14 +82,14 @@ export function correctTable(rawRows, year, month) {
 
     // Greedily drop the worst outlier until every trusted value fits its neighbours.
     for (;;) {
-      let worst = -1, worstDev = TOLERANCE;
+      let worst = -1, worstExcess = 0;
       for (let i = 0; i < n; i++) {
         if (!good[i]) continue;
         good[i] = false;
-        const p = predict(vals, good, i);
+        const est = predict(vals, good, i);
         good[i] = true;
-        const dev = p == null ? 0 : Math.abs(vals[i] - p);
-        if (dev > worstDev) { worstDev = dev; worst = i; }
+        const excess = est == null ? 0 : Math.abs(vals[i] - est.p) - est.tol;
+        if (excess > worstExcess) { worstExcess = excess; worst = i; }
       }
       if (worst < 0) break;
       good[worst] = false;
@@ -85,13 +97,25 @@ export function correctTable(rawRows, year, month) {
 
     for (let i = 0; i < n; i++) {
       if (good[i]) { days[i][c] = vals[i] + dstShift(i); continue; }
-      const p = predict(vals, good, i);
-      if (p == null) { flags[i][c] = 'uncertain'; continue; }
+      const est = predict(vals, good, i);
+      if (est == null) { flags[i][c] = 'uncertain'; continue; }
+      const { p, tol } = est;
       let best = null;
-      for (let v of candidates(digits[i])) {
+      const consider = (v, dev) => { if (dev <= tol && (!best || dev < best.dev)) best = { v, dev }; };
+      // An alternative reading that fits as-is beats guessing digit edits.
+      for (const alt of readings[i].slice(1)) {
+        let v = digitsToMinutes(alt);
+        if (v == null) continue;
         if (c === 5 && v < 180) v += 1440;
-        const dev = Math.abs(v - dstShift(i) - p);
-        if (dev <= TOLERANCE - 1 && (!best || dev < best.dev)) best = { v, dev };
+        consider(v, Math.abs(v - dstShift(i) - p));
+      }
+      if (!best) {
+        for (const d of readings[i]) {
+          for (let v of candidates(d)) {
+            if (c === 5 && v < 180) v += 1440;
+            consider(v, Math.abs(v - dstShift(i) - p));
+          }
+        }
       }
       if (best) {
         days[i][c] = best.v;
