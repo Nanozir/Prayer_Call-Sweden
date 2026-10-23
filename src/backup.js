@@ -22,7 +22,10 @@ function cleanSchedule(s) {
   if (!Number.isInteger(month) || month < 1 || month > 12) return null;
   if (!Array.isArray(days) || days.length !== daysInMonth(year, month)) return null;
   if (!days.every((row) => Array.isArray(row) && row.length === 6 && row.every(isTime))) return null;
-  return { year, month, days: days.map((row) => [...row]), savedAt: typeof s.savedAt === 'string' ? s.savedAt : undefined };
+  return {
+    year, month, days: days.map((row) => [...row]), savedAt: typeof s.savedAt === 'string' ? s.savedAt : undefined,
+    ...(s.source === 'islam.nu' ? { source: s.source } : {}),
+  };
 }
 
 function cleanSettings(s) {
@@ -36,6 +39,9 @@ function cleanSettings(s) {
   if (typeof s.reminders === 'boolean') out.reminders = s.reminders;
   if (typeof s.estimate === 'boolean') out.estimate = s.estimate;
   if (Number.isInteger(s.hijriOffset) && Math.abs(s.hijriOffset) <= 2) out.hijriOffset = s.hijriOffset;
+  if (['list', 'board'].includes(s.view)) out.view = s.view;
+  if (Array.isArray(s.iqamah) && s.iqamah.length === 5 && s.iqamah.every((m) => Number.isInteger(m) && m >= 0 && m <= 60)) out.iqamah = [...s.iqamah];
+  if (s.jumua === null || (Number.isInteger(s.jumua) && s.jumua >= 600 && s.jumua < 900)) out.jumua = s.jumua;
   return out;
 }
 

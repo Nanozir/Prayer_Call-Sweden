@@ -245,3 +245,42 @@ html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale
 .calibrate { text-align: left; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin-top: 12px; }
 .tabs button span { white-space: nowrap; }
 .button.secondary { background: var(--accent-soft); color: var(--accent); } label.button { display: inline-block; cursor: pointer; }
+
+/* View switch (Lista / Moskétavla) */
+.view-switch { display: flex; gap: 4px; margin: 4px auto 0; padding: 3px; width: fit-content; border-radius: 99px; background: var(--accent-soft); }
+.view-switch button { background: transparent; color: var(--accent); padding: 6px 14px; border-radius: 99px; font-size: .85rem; }
+.view-switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { .view-switch button[aria-pressed="true"] { color: #0d1a14; } }
+.badge.source { background: var(--warn-bg); color: var(--warn); margin-left: 4px; }
+
+/* Mosque board: always dark, like the screen in the mosque. */
+.board {
+  margin: 12px 0; padding: 16px 12px 12px; border-radius: 16px; color: #e9f2f0;
+  background: radial-gradient(120% 90% at 50% 0%, #1d3a3e 0%, #0e1d20 70%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.board-top { display: grid; grid-template-columns: 1fr 2.4fr 1fr; align-items: start; gap: 6px; }
+.board-side { display: flex; flex-direction: column; gap: 2px; }
+.board-side.right { align-items: flex-end; text-align: right; }
+.bs-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+.bs-time { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bs-time.today { color: #5fe0c8; }
+.board-center { text-align: center; min-width: 0; }
+.board-mosque { font-size: .85rem; letter-spacing: .04em; opacity: .85; }
+.board-clock { font-size: clamp(2.2rem, 11vw, 3.4rem); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.1; }
+.board-date { font-size: .9rem; margin-top: 2px; }
+.board-hijri { font-size: .85rem; opacity: .75; }
+.board-next { margin: 12px auto 4px; text-align: center; font-weight: 600; color: #5fe0c8; }
+.board-next.iqamah { color: #f3c56b; }
+.board-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px; }
+.tile {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px;
+  border-radius: 12px; background: rgba(255,255,255,.06); min-width: 0;
+}
+.tile.past { opacity: .55; }
+.tile.next { background: linear-gradient(180deg, #1fa898 0%, #127a6f 100%); box-shadow: 0 0 0 2px #5fe0c8; color: #fff; opacity: 1; }
+.t-name { font-size: .8rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.t-time { font-size: clamp(1rem, 4.6vw, 1.35rem); font-weight: 800; font-variant-numeric: tabular-nums; }
+.t-iq { font-size: .75rem; opacity: .8; }
+.iqamah-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin: 8px 0; }
+.iqamah-grid label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; }

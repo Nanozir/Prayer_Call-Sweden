@@ -34,8 +34,11 @@ Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, 
 
 ## Funktioner i korthet
 
-- **Idag:** nästa bön med nedräkning, hijri-datum, svep mellan dagar.
-- **Scheman:** läs in moskéns schema från en bild, granska/ändra tider, kalenderexport.
+- **Idag:** nästa bön med nedräkning, hijri-datum, svep mellan dagar. Kan visas som lista eller
+  som **moskétavla** (stor klocka, iqamah-tider, Jumua – ställs in under Inställningar).
+- **Scheman:** läs in schemat från en bild eller PDF (t.ex. islam.nu), granska/ändra tider,
+  kalenderexport. Obs: islam.nu räknar fram egna tider som skiljer sig några minuter från
+  moskéns schema (Maghrib oftast 3–4 min tidigare) – appen varnar för det.
 - **Qibla:** kompass mot Mecka (142° från Karlstad), utan platsbehörighet.
 - **Inställningar:** notiser och ljud, "Fungerar notiserna?"-kontroll, beräknade tider (nödläge),
   justering av hijri-datum.
@@ -147,6 +150,7 @@ npm test            # enhetstester (rättningslogik, tidszoner)
 npm run test:ocr    # läser in exempelbilden i Chromium och jämför alla 186 tider
 npm run test:ocr-bench   # försämrade bilder (skugga, låg upplösning, mörkt läge, oskärpa);
                          # misslyckas om något fel inte markeras gult/rött
+npm run test:pdf    # islam.nu-PDF (exakt), skannad PDF (OCR) och moskétavlan
 npm run test:native # kör appen som "Android"/"iPhone" (simulerad native-del): notiser,
                     # notiskontrollen, widgetdata, kiblakompassen
 npm run sounds      # genererar om notisljuden (lågmälda klocktoner)
@@ -157,6 +161,8 @@ npm run build && npx cap sync   # öppna sedan android/ i Android Studio eller i
 - `src/ocr/recognize.js` – läser varje cell med Tesseract (endast siffror)
 - `src/ocr/correct.js` – rättar läsfel med hjälp av att tiderna bara ändras lite per dag
 - `src/ocr/binarize.js` – bildförbehandling (Sauvola, kontrast, mörkt läge)
+- `src/pdf.js`, `src/schedule-text.js` – PDF-import (pdf.js, offline) och tolkning av tabelltext
+- `src/board.js` – moskétavlan
 - `src/notify.js` – schemalägger notiser (alltid om från början, inget blir kvar) och widgetdata
 - `src/health.js` – "Fungerar notiserna?"-listan
 - `src/qibla.js`, `src/hijri.js`, `src/daynav.js`, `src/estimate.js`, `src/ics.js`

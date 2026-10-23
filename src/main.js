@@ -19,6 +19,7 @@ import { addDays, sameDay, dayRow, step } from './daynav.js';
 import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
 import { healthItems } from './health.js';
 import { hijriDate } from './hijri.js';
+import { boardHtml, BOARD_PRAYERS } from './board.js';
 import { qiblaBearing, distanceKm, headingFromEvent, turnBy, compassWord } from './qibla.js';
 import { Capacitor } from '@capacitor/core';
 
@@ -51,6 +52,7 @@ function show(view) {
 function render() {
   app.replaceChildren();
   stopCompass?.();
+  clearInterval(clockTimer);
   if (state.view === 'home') renderHome();
   else if (state.view === 'import') renderImport();
   else if (state.view === 'qibla') renderQibla();
@@ -152,6 +154,21 @@ function renderHome() {
   });
   app.append(nav);
 
+  const board = state.settings.view === 'board';
+  const viewSwitch = h(`<div class="view-switch" role="group" aria-label="Visning">
+    <button type="button" data-v="list" aria-pressed="${!board}">Lista</button>
+    <button type="button" data-v="board" aria-pressed="${board}">Moskétavla</button>
+  </div>`);
+  viewSwitch.querySelectorAll('button').forEach((b) => {
+    b.onclick = async () => {
+      if (state.settings.view === b.dataset.v) return;
+      state.settings.view = b.dataset.v;
+      await saveSettings(state.settings);
+      render();
+    };
+  });
+  app.append(viewSwitch);
+
   const pane = h('<div class="day-pane"></div>');
   if (state.anim) {
     // With View Transitions the browser animates; otherwise fall back to CSS classes.
@@ -180,48 +197,59 @@ function renderHome() {
   const estimated = !!shown[monthKey(date.year, date.month)]?.estimated;
   const badge = estimated ? ' <span class="est-badge">Beräknade tider</span>' : '';
   const next = isToday ? nextPrayer(shown, today) : null;
-  if (isToday) {
-    const prev = next ? (next.index > 0 ? row[next.index - 1] : null) : null;
-    const pct = next && prev != null ? Math.min(100, Math.max(0, ((today.minutes - prev) / (next.minutes - prev)) * 100)) : 0;
-    pane.append(h(`<section class="hero">
-      <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}${badge}</div>
-      ${next ? `<div class="hero-label">Nästa bön</div>
-        <div class="hero-main"><span class="hero-name">${next.prayer.name}</span><span class="hero-time">${fmt(next.minutes)}</span></div>
-        <div class="hero-count">om ${countdown(next.minutes - today.minutes)}</div>
-        ${prev != null ? `<div class="hero-bar"><span style="width:${pct.toFixed(0)}%"></span></div>` : ''}`
-    : '<div class="hero-main"><span class="hero-name">Dagens böner är klara</span></div>'}
-    </section>`));
+  if (board) {
+    pane.append(h(boardHtml({
+      row, now: isToday ? today.minutes : null, iqamah: state.settings.iqamah, jumua: state.settings.jumua,
+      isFriday: weekday(date.year, date.month, date.day) === 5,
+      dateText: esc(`${wd} ${date.day} ${MONTHS_SV[date.month - 1]} ${date.year}`), hijri: hijri && esc(hijri), badge,
+    })));
   } else {
-    const diff = Math.round((Date.UTC(date.year, date.month - 1, date.day) - Date.UTC(today.year, today.month - 1, today.day)) / 864e5);
-    const rel = diff === 1 ? 'Imorgon' : diff === -1 ? 'Igår' : diff > 0 ? `Om ${diff} dagar` : `För ${-diff} dagar sedan`;
-    pane.append(h(`<section class="hero hero-other">
-      <div class="hero-date">${rel}${badge}</div>
-      <div class="hero-main"><span class="hero-name">${wd} ${date.day} ${MONTHS_SV[date.month - 1]}</span></div>
-      <div class="hero-count">Fajr ${fmt(row[0])} · Maghrib ${fmt(row[4])}</div>
-    </section>`));
+    if (isToday) {
+      const prev = next ? (next.index > 0 ? row[next.index - 1] : null) : null;
+      const pct = next && prev != null ? Math.min(100, Math.max(0, ((today.minutes - prev) / (next.minutes - prev)) * 100)) : 0;
+      pane.append(h(`<section class="hero">
+        <div class="hero-date">${wd} ${today.day} ${MONTHS_SV[today.month - 1]}${badge}</div>
+        ${next ? `<div class="hero-label">Nästa bön</div>
+          <div class="hero-main"><span class="hero-name">${next.prayer.name}</span><span class="hero-time">${fmt(next.minutes)}</span></div>
+          <div class="hero-count">om ${countdown(next.minutes - today.minutes)}</div>
+          ${prev != null ? `<div class="hero-bar"><span style="width:${pct.toFixed(0)}%"></span></div>` : ''}`
+      : '<div class="hero-main"><span class="hero-name">Dagens böner är klara</span></div>'}
+      </section>`));
+    } else {
+      const diff = Math.round((Date.UTC(date.year, date.month - 1, date.day) - Date.UTC(today.year, today.month - 1, today.day)) / 864e5);
+      const rel = diff === 1 ? 'Imorgon' : diff === -1 ? 'Igår' : diff > 0 ? `Om ${diff} dagar` : `För ${-diff} dagar sedan`;
+      pane.append(h(`<section class="hero hero-other">
+        <div class="hero-date">${rel}${badge}</div>
+        <div class="hero-main"><span class="hero-name">${wd} ${date.day} ${MONTHS_SV[date.month - 1]}</span></div>
+        <div class="hero-count">Fajr ${fmt(row[0])} · Maghrib ${fmt(row[4])}</div>
+      </section>`));
+    }
+
+    const list = h('<section class="card prayers-today"></section>');
+    const past = date.year * 10000 + date.month * 100 + date.day < today.year * 10000 + today.month * 100 + today.day;
+    PRAYERS.forEach((p, i) => {
+      const on = state.settings.enabled[p.key];
+      const cls = next?.index === i ? 'next' : past || (isToday && row[i] <= today.minutes) ? 'past' : '';
+      const item = h(`<div class="prayer ${cls}">
+        <span class="p-name">${p.name}${p.key === 'shuruk' ? '<small>soluppgång</small>' : ''}</span>
+        <span class="p-time">${fmt(row[i])}</span>
+        <button class="bell ${on ? 'on' : ''}" aria-label="${on ? 'Stäng av' : 'Slå på'} notis för ${p.name}">${on ? ICON.bellOn : ICON.bellOff}</button>
+      </div>`);
+      item.querySelector('.bell').onclick = async () => {
+        state.settings.enabled[p.key] = !on;
+        await saveSettings(state.settings);
+        render();
+        await refreshNotifications();
+        render();
+      };
+      list.append(item);
+    });
+    pane.append(list);
   }
 
-  const list = h('<section class="card prayers-today"></section>');
-  const past = date.year * 10000 + date.month * 100 + date.day < today.year * 10000 + today.month * 100 + today.day;
-  PRAYERS.forEach((p, i) => {
-    const on = state.settings.enabled[p.key];
-    const cls = next?.index === i ? 'next' : past || (isToday && row[i] <= today.minutes) ? 'past' : '';
-    const item = h(`<div class="prayer ${cls}">
-      <span class="p-name">${p.name}${p.key === 'shuruk' ? '<small>soluppgång</small>' : ''}</span>
-      <span class="p-time">${fmt(row[i])}</span>
-      <button class="bell ${on ? 'on' : ''}" aria-label="${on ? 'Stäng av' : 'Slå på'} notis för ${p.name}">${on ? ICON.bellOn : ICON.bellOff}</button>
-    </div>`);
-    item.querySelector('.bell').onclick = async () => {
-      state.settings.enabled[p.key] = !on;
-      await saveSettings(state.settings);
-      render();
-      await refreshNotifications();
-      render();
-    };
-    list.append(item);
-  });
-  pane.append(list);
-
+  if (state.schedules[monthKey(date.year, date.month)]?.source === 'islam.nu') {
+    pane.append(h('<p class="muted center">Tider från islam.nu (inte moskéns eget schema)</p>'));
+  }
   const n = state.notifyResult;
   if (isToday && n?.native && !n.denied && !n.error) {
     pane.append(h(`<p class="muted center">${n.scheduled
@@ -229,6 +257,23 @@ function renderHome() {
       : 'Inga kommande notiser schemalagda.'}</p>`));
   }
   if (isToday) pane.append(h('<p class="muted center swipe-hint">Svep åt sidan för att se andra dagar</p>'));
+  if (board && isToday) startClock();
+}
+
+// Live clock on the mosque board; re-renders when the minute changes so the
+// highlighted prayer and countdown follow.
+let clockTimer = null;
+function startClock() {
+  const el = app.querySelector('[data-clock]');
+  if (!el) return;
+  const fmtClock = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const shownMinute = nowInStockholm().minutes;
+  const tick = () => {
+    if (nowInStockholm().minutes !== shownMinute) { render(); return; }
+    el.textContent = fmtClock.format(new Date());
+  };
+  tick();
+  clockTimer = setInterval(tick, 1000);
 }
 
 const sameMonth = (a, b) => a.year === b.year && a.month === b.month;
@@ -290,10 +335,10 @@ function renderScheduleList() {
   const labels = { current: 'Gäller nu', upcoming: 'Kommande', expired: 'Utgånget' };
   for (const [key, s] of list) {
     const st = scheduleStatus(s, today);
-    const li = h(`<li><span class="sched-name">${monthLabel(s.year, s.month)}<span class="badge ${st}">${labels[st]}</span></span>
+    const li = h(`<li><span class="sched-name">${monthLabel(s.year, s.month)}<span class="badge ${st}">${labels[st]}</span>${s.source === 'islam.nu' ? '<span class="badge source">islam.nu</span>' : ''}</span>
       <span class="row"><button class="secondary small" data-a="edit">Visa / ändra</button><button class="secondary small" data-a="ics" title="Dela till kalender (t.ex. iPhone)">📅 Kalender</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
     li.querySelector('[data-a=edit]').onclick = () => {
-      state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true };
+      state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true, source: s.source ?? null };
       render();
       window.scrollTo(0, 0);
     };
@@ -323,8 +368,8 @@ function renderImport() {
 
   const card = h(`<section class="card">
     <h2>Lägg till månadsschema</h2>
-    <p class="muted">Välj en bild eller skärmdump av moskéns schema. Tiderna läses av direkt i telefonen och du får granska dem innan de sparas.</p>
-    <label class="file-pick"><input type="file" accept="image/*" />${ICON.image}<span>Välj bild</span></label>
+    <p class="muted">Välj en bild, skärmdump eller PDF av schemat. Tiderna läses av direkt i telefonen och du får granska dem innan de sparas.</p>
+    <label class="file-pick"><input type="file" accept="image/*,application/pdf,.pdf" />${ICON.image}<span>Välj bild eller PDF</span></label>
     <div class="progress-box" hidden>
       <img class="thumb" alt="" />
       <div class="progress-info">
@@ -344,30 +389,42 @@ function renderImport() {
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
-    const imageUrl = URL.createObjectURL(file);
+    const pdf = (await import('./pdf.js')).isPdf(file);
+    let imageUrl = pdf ? '' : URL.createObjectURL(file);
     box.querySelector('.thumb').src = imageUrl;
     box.hidden = false;
     pick.hidden = true;
     errEl.replaceChildren();
+    const progress = (f, msg) => {
+      box.querySelector('.bar span').style.width = `${Math.round(f * 100)}%`;
+      box.querySelector('.pct').textContent = `${Math.round(f * 100)} %`;
+      box.querySelector('.msg').textContent = msg;
+    };
     try {
-      const { readSchedule } = await import('./ocr/recognize.js');
-      const res = await readSchedule(file, (f, msg) => {
-        box.querySelector('.bar span').style.width = `${Math.round(f * 100)}%`;
-        box.querySelector('.pct').textContent = `${Math.round(f * 100)} %`;
-        box.querySelector('.msg').textContent = msg;
-      });
+      let res;
+      if (pdf) {
+        progress(0.1, 'Läser PDF…');
+        const out = await (await import('./pdf.js')).readPdf(file);
+        imageUrl = URL.createObjectURL(out.image);
+        box.querySelector('.thumb').src = imageUrl;
+        if (out.kind === 'text') res = out.result;
+        else res = await (await import('./ocr/recognize.js')).readSchedule(out.image, progress);
+      } else {
+        const { readSchedule } = await import('./ocr/recognize.js');
+        res = await readSchedule(file, progress);
+      }
       const now = nowInStockholm();
       state.draft = {
         year: res.year ?? now.year, month: res.month ?? now.month,
         monthDetected: res.year != null && res.month != null,
-        days: res.days, flags: res.flags, raw: res.rawRows, image: imageUrl,
+        days: res.days, flags: res.flags, raw: res.rawRows, image: imageUrl, source: res.source ?? null,
       };
       fitDraftToMonth();
       render();
       window.scrollTo(0, 0);
     } catch (e) {
       console.error(e);
-      errEl.replaceChildren(h(`<div class="banner bad">Kunde inte läsa bilden: ${esc(e.message ?? e)}<br>Försök igen, eller skriv in tiderna manuellt.</div>`));
+      errEl.replaceChildren(h(`<div class="banner bad">Kunde inte läsa ${pdf ? 'filen' : 'bilden'}: ${esc(e.message ?? e)}<br>Försök igen, eller skriv in tiderna manuellt.</div>`));
       box.hidden = true;
       pick.hidden = false;
       input.value = '';
@@ -382,6 +439,11 @@ function renderImport() {
   app.append(card);
   renderScheduleList();
 }
+
+// islam.nu calculates its own times; Karlstads moské's table differs by a few minutes
+// (October 2026: Maghrib 3–4 min later, Shuruk 1–2 min earlier, Fajr 1–2 min later).
+const ISLAMNU_NOTE = 'Tiderna kommer från islam.nu, inte från moskéns eget schema. De skiljer sig några minuter – '
+  + 'hos Karlstads moské är t.ex. Maghrib oftast 3–4 min senare och Fajr 1–2 min senare. Använd moskéns schema om det finns.';
 
 // Pads/trims the draft so it has exactly one row per day of the chosen month.
 function fitDraftToMonth() {
@@ -425,6 +487,7 @@ function renderReview() {
     if (st === 'upcoming') msgs.push(['ok', `Schemat börjar gälla 1 ${MONTHS_SV[d.month - 1]} ${d.year}.`]);
     if (st === 'current') msgs.push(['ok', `Schemat gäller nu (${monthLabel(d.year, d.month)}).`]);
     if (!d.existing && state.schedules[monthKey(d.year, d.month)]) msgs.push(['warn', 'Det finns redan ett schema för den här månaden – det ersätts när du sparar.']);
+    if (d.source === 'islam.nu') msgs.push(['warn', ISLAMNU_NOTE]);
     if (d.rowCountMismatch) msgs.push(['warn', `Bilden gav ${d.rowCountMismatch} rader men månaden har ${daysInMonth(d.year, d.month)} dagar – kontrollera tabellen.`]);
     statusEl.replaceChildren(...msgs.map(([k, t]) => h(`<div class="banner ${k}">${esc(t)}</div>`)));
   };
@@ -544,6 +607,7 @@ function renderReview() {
       && !confirm(`Schemat för ${monthLabel(d.year, d.month)} har redan gått ut. Spara ändå (utan notiser)?`)) return;
     state.schedules = await saveSchedule({
       year: d.year, month: d.month, days: d.days, savedAt: new Date().toISOString(),
+      ...(d.source ? { source: d.source } : {}),
     });
     state.draft = null;
     await refreshNotifications();
@@ -739,6 +803,16 @@ function renderSettings() {
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
     <p class="muted msg" role="status" aria-live="polite"></p>
   </section>
+  <section class="card"><h2>Moskétavla</h2>
+    <p class="muted">Visningen <b>Moskétavla</b> på Idag, som skärmen i moskén. Iqamah = minuter från
+      böneutropet tills bönen börjar.</p>
+    <div class="iqamah-grid">${BOARD_PRAYERS.map((i, k) => `<label><span>${PRAYERS[i].name}</span>
+      <select data-iq="${k}" aria-label="Iqamah ${PRAYERS[i].name}">${[0, 5, 10, 15, 20, 25, 30].concat(s.iqamah[k]).filter((m, j, a) => a.indexOf(m) === j).sort((a, b) => a - b)
+    .map((m) => `<option value="${m}" ${m === s.iqamah[k] ? 'selected' : ''}>+${m} min</option>`).join('')}</select></label>`).join('')}</div>
+    <div class="toggle"><span>Jumua (fredagsbön)<br><small class="muted">Töm fältet för att dölja</small></span>
+      <input type="time" data-f="jumua" value="${s.jumua == null ? '' : fmt(s.jumua)}" /></div>
+    <p class="muted board-msg" role="status" aria-live="polite"></p>
+  </section>
   <section class="card"><h2>Säkerhetskopia</h2>
     <p class="muted">Spara alla scheman och inställningar i en fil – t.ex. för att flytta dem till en ny
       telefon eller till Google Play-versionen av appen.</p>
@@ -788,6 +862,21 @@ function renderSettings() {
       + 'Använd dem bara när moskéns schema saknas. Slå på ändå?')) { e.target.checked = false; return; }
     s.estimate = e.target.checked;
     persist();
+  };
+  const boardMsg = card.querySelector('.board-msg');
+  card.querySelectorAll('[data-iq]').forEach((sel) => {
+    sel.onchange = async () => {
+      s.iqamah = s.iqamah.map((m, k) => (k === +sel.dataset.iq ? +sel.value : m));
+      await saveSettings(s);
+      boardMsg.textContent = 'Sparat.';
+    };
+  });
+  card.querySelector('[data-f=jumua]').onchange = async (e) => {
+    const v = e.target.value ? parseTime(e.target.value) : null;
+    if (v != null && (v < 600 || v >= 900)) { boardMsg.textContent = 'Jumua måste vara mellan 10:00 och 15:00.'; return; }
+    s.jumua = v;
+    await saveSettings(s);
+    boardMsg.textContent = v == null ? 'Jumua visas inte.' : `Jumua ${fmt(v)} sparat.`;
   };
   const backupMsg = card.querySelector('.backup-msg');
   card.querySelector('[data-a=export]').onclick = async () => {

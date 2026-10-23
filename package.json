@@ -1,6 +1,6 @@
 {
   "name": "salah-kalender",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "test:ocr": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/ocr-e2e.mjs",
     "sounds": "node scripts/make-sounds.mjs",
     "test:ocr-bench": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/ocr-bench.mjs --strict",
-    "test:native": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/native-e2e.mjs"
+    "test:native": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/native-e2e.mjs",
+    "test:pdf": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/pdf-e2e.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -22,6 +23,7 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.3",
     "@tesseract.js-data/eng": "^1.0.0",
+    "pdfjs-dist": "^6.4.299",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
