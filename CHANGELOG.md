@@ -3,6 +3,18 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.8.0] – 2026-10-23
+
+### Nytt
+- **PDF-scheman:** under *Scheman* kan nu även PDF-filer väljas, t.ex. från islam.nu. PDF:er med
+  text läses exakt (inga läsfel att granska); skannade PDF:er läses som en bild. Allt sker offline.
+  Tider från islam.nu märks tydligt, eftersom de skiljer sig några minuter från Karlstads moskés
+  eget schema (t.ex. Maghrib oftast 3–4 min tidigare).
+- **Moskétavla:** ny visning på *Idag* som liknar skärmen i moskén – stor klocka med sekunder,
+  datum och hijri, Shuruk, Jumua och de fem bönerna med iqamah-tider. Nästa bön lyses upp och
+  mellan böneutrop och iqamah räknas det ner till iqamah. Iqamah-minuter och Jumua-tid ställs in
+  under *Inställningar*.
+
 ## [1.7.0] – 2026-10-16
 
 ### Nytt

@@ -14,6 +14,9 @@ export const DEFAULT_SETTINGS = {
   reminders: true, // remind when a schedule is about to run out
   estimate: false, // emergency mode: calculate times when no mosque schedule exists
   hijriOffset: 0, // days to shift the Umm al-Qura Hijri date (local moon sighting)
+  view: 'list', // 'list' | 'board' – how Idag shows the day (board = like the mosque's screen)
+  iqamah: [10, 10, 10, 5, 0], // minutes from adhan to iqamah: Fajr, Dhohr, Asr, Maghrib, Isha
+  jumua: null, // Friday prayer time in minutes, shown on the board (null = hidden)
 };
 
 async function getJson(key, fallback) {
