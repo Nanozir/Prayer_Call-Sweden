@@ -125,7 +125,9 @@ let backupText;
   const facts = await page.$eval('.qibla-facts', (e) => e.textContent);
   check(/142°.*sydost.*4\s?707 km/.test(facts), `Qibla: ${facts.trim()}`);
   await page.click('[data-a=start]');
-  const turn = (alpha) => page.evaluate((a) => window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', { alpha: a, beta: 0, gamma: 0, absolute: true })), alpha);
+  // Newer WebViews ask for sensor permission first, so the listener is attached a moment later.
+  await page.waitForFunction(() => document.querySelector('.compass-status')?.textContent.includes('Söker kompass'));
+  const turn = (alpha) => page.evaluate((a) => window.dispatchEvent(new DeviceOrientationEvent('ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation', { alpha: a, beta: 0, gamma: 0, absolute: true })), alpha);
   await turn(360 - 355); // magnetic 355° + 5° declination = facing true north
   let status = await page.$eval('.compass-status', (e) => e.textContent);
   check(/Vrid dig 142° åt höger/.test(status), `Qibla: mot norr → "${status}"`);
