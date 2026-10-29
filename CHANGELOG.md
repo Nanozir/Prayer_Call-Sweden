@@ -3,6 +3,19 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.9.0] – 2026-10-29
+
+### Nytt
+- **Alarm per bön:** slå på ett riktigt alarm för valfri bön (t.ex. Fajr) under *Inställningar → Alarm*, vid
+  bönetiden eller 5–30 min innan. Alarmet följer schemat automatiskt varje dag, ringer med böneutrop tills
+  det stängs av (eller i högst 5 min), kan snoozas 5 min och visas över låsskärmen. Android ber om
+  "Alarm och påminnelser" och (Android 14+) "Fullskärmsnotiser". På iPhone blir alarmet en notis med ljud.
+- **Flera påminnelser per bön:** välj valfria tider innan varje bön (5, 10, 15, 20, 30, 45 eller 60 min),
+  t.ex. Dhohr om 10 och 5 min. "Samma för alla" kopierar valet. Tidigare inställning flyttas över automatiskt.
+- **Månadsvy:** hela månadens bönetider i en tabell (dagens rad markerad, fredagar tonade, passerade dagar
+  nedtonade). Öppnas via *Månadsvy* på Idag eller vid varje månad under *Scheman*. Tryck på en dag för att
+  hoppa dit.
+
 ## [1.8.0] – 2026-10-23
 
 ### Nytt

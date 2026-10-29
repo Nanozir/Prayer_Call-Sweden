@@ -39,6 +39,9 @@ Tips: sätt batterioptimering för appen till *Obegränsad* om notiser uteblir, 
 - **Scheman:** läs in schemat från en bild eller PDF (t.ex. islam.nu), granska/ändra tider,
   kalenderexport. Obs: islam.nu räknar fram egna tider som skiljer sig några minuter från
   moskéns schema (Maghrib oftast 3–4 min tidigare) – appen varnar för det.
+- **Månadsvy:** hela månadens tider i en tabell, från Idag eller Scheman.
+- **Påminnelser och alarm:** flera påminnelser innan varje bön (5–60 min) och riktiga alarm per bön
+  (vid bönetiden eller 5–30 min innan) som ringer tills de stängs av – t.ex. för Fajr.
 - **Qibla:** kompass mot Mecka (142° från Karlstad), utan platsbehörighet.
 - **Inställningar:** notiser och ljud, "Fungerar notiserna?"-kontroll, beräknade tider (nödläge),
   justering av hijri-datum.
@@ -165,6 +168,8 @@ npm run build && npx cap sync   # öppna sedan android/ i Android Studio eller i
 - `src/board.js` – moskétavlan
 - `src/notify.js` – schemalägger notiser (alltid om från början, inget blir kvar) och widgetdata
 - `src/health.js` – "Fungerar notiserna?"-listan
+- `src/alarm.js`, `src/month.js` – alarmtider och månadsvyn; native-alarmet ligger i
+  `AlarmScheduler`/`AlarmService`/`AlarmActivity` (Android)
 - `src/qibla.js`, `src/hijri.js`, `src/daynav.js`, `src/estimate.js`, `src/ics.js`
 - `android/app/src/main/java/se/salahkalender/app/` – egen native-kod: batteristatus,
   inställningsgenvägar (`SalahNativePlugin`) och widgeten (`NextPrayerWidget`)
