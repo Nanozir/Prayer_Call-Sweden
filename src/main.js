@@ -19,12 +19,13 @@ import { addDays, sameDay, dayRow, step } from './daynav.js';
 import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
 import { healthItems } from './health.js';
 import { hijriDate } from './hijri.js';
+import { monthRows, shiftMonth } from './month.js';
 import { boardHtml, BOARD_PRAYERS } from './board.js';
 import { qiblaBearing, distanceKm, headingFromEvent, turnBy, compassWord } from './qibla.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
-const state = { view: 'home', viewDate: null, anim: null, schedules: {}, settings: null, notifyResult: null, perms: null, draft: null };
+const state = { view: 'home', viewDate: null, anim: null, schedules: {}, settings: null, notifyResult: null, perms: null, draft: null, monthSel: null };
 
 const ICON = {
   bellOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>',
@@ -44,9 +45,14 @@ document.querySelectorAll('.tabs button').forEach((b) => {
 function show(view) {
   if (view === 'home' && state.view !== 'home') state.viewDate = null;
   state.view = view;
-  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === (view === 'month' ? 'home' : view)));
   render();
   window.scrollTo(0, 0);
+}
+
+function openMonth(year, month) {
+  state.monthSel = { year, month };
+  show('month');
 }
 
 function render() {
@@ -54,6 +60,7 @@ function render() {
   stopCompass?.();
   clearInterval(clockTimer);
   if (state.view === 'home') renderHome();
+  else if (state.view === 'month') renderMonth();
   else if (state.view === 'import') renderImport();
   else if (state.view === 'qibla') renderQibla();
   else renderSettings();
@@ -168,6 +175,9 @@ function renderHome() {
     };
   });
   app.append(viewSwitch);
+  const monthBtn = h('<div class="month-link"><button class="link" data-a="month">📅 Månadsvy</button></div>');
+  monthBtn.querySelector('button').onclick = () => openMonth(date.year, date.month);
+  app.append(monthBtn);
 
   const pane = h('<div class="day-pane"></div>');
   if (state.anim) {
@@ -323,6 +333,56 @@ function setupSwipe() {
   }, { passive: true });
 }
 
+function renderMonth() {
+  const today = nowInStockholm();
+  const shown = withEstimates(state.schedules, state.settings, today);
+  const sel = state.monthSel ?? { year: today.year, month: today.month };
+  const sched = shown[monthKey(sel.year, sel.month)];
+  const can = (d) => {
+    const to = shiftMonth(sel, d);
+    return !!(shown[monthKey(to.year, to.month)] || sched);
+  };
+  const go = (d) => { state.monthSel = shiftMonth(sel, d); render(); window.scrollTo(0, 0); };
+  const nav = h(`<div class="day-nav">
+    <button class="nav-arrow" aria-label="Föregående månad" ${can(-1) ? '' : 'disabled'}>‹</button>
+    <div class="nav-label"><span class="nav-day">${monthLabel(sel.year, sel.month)}</span>
+      ${sched?.estimated ? '<span class="est-badge">Beräknade tider</span>' : ''}</div>
+    <button class="nav-arrow" aria-label="Nästa månad" ${can(1) ? '' : 'disabled'}>›</button>
+  </div>`);
+  const [prev, next] = nav.querySelectorAll('.nav-arrow');
+  prev.onclick = () => go(-1);
+  next.onclick = () => go(1);
+  app.append(nav);
+
+  if (!sched) {
+    const card = h(`<section class="card no-schedule"><div class="no-schedule-icon">📅</div>
+      <h2>Inget schema för ${monthLabel(sel.year, sel.month)}</h2>
+      <p class="muted">Lägg till månadens schema under Scheman så visas alla tider här.</p>
+      <button data-a="import">Lägg till schema</button></section>`);
+    card.querySelector('button').onclick = () => show('import');
+    app.append(card);
+    return;
+  }
+  const rows = monthRows(sched, today).map((r) => `<tr data-day="${r.day}" class="${[r.today && 'today', r.past && 'past', r.friday && 'fri'].filter(Boolean).join(' ')}">
+    <th scope="row"><b>${r.day}</b> <span>${r.wd}</span></th>${r.times.map((t) => `<td>${t == null ? '–' : fmt(t)}</td>`).join('')}</tr>`).join('');
+  const wrap = h(`<div class="month-wrap"><table class="month">
+    <thead><tr><th>Dag</th>${PRAYERS.map((p) => `<th>${p.name}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`);
+  wrap.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.onclick = () => {
+      const d = { year: sel.year, month: sel.month, day: +tr.dataset.day };
+      state.view = 'home';
+      state.viewDate = sameDay(d, today) ? null : d;
+      document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === 'home'));
+      render();
+      window.scrollTo(0, 0);
+    };
+  });
+  app.append(wrap);
+  app.append(h(`<p class="muted small-text month-note">${sched.estimated ? 'Beräknade tider – inte moskéns eget schema. ' : ''}Fredagar (Jumua) är markerade. Tryck på en dag för att öppna den.</p>`));
+  const tr = wrap.querySelector('tr.today');
+  if (tr) setTimeout(() => tr.scrollIntoView({ block: 'center' }));
+}
+
 function renderScheduleList() {
   const today = nowInStockholm();
   const list = Object.entries(state.schedules).sort(([a], [b]) => (a < b ? 1 : -1));
@@ -336,7 +396,8 @@ function renderScheduleList() {
   for (const [key, s] of list) {
     const st = scheduleStatus(s, today);
     const li = h(`<li><span class="sched-name">${monthLabel(s.year, s.month)}<span class="badge ${st}">${labels[st]}</span>${s.source === 'islam.nu' ? '<span class="badge source">islam.nu</span>' : ''}</span>
-      <span class="row"><button class="secondary small" data-a="edit">Visa / ändra</button><button class="secondary small" data-a="ics" title="Dela till kalender (t.ex. iPhone)">📅 Kalender</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
+      <span class="row"><button class="secondary small" data-a="month">Månadsvy</button><button class="secondary small" data-a="edit">Visa / ändra</button><button class="secondary small" data-a="ics" title="Dela till kalender (t.ex. iPhone)">📅 Kalender</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
+    li.querySelector('[data-a=month]').onclick = () => openMonth(s.year, s.month);
     li.querySelector('[data-a=edit]').onclick = () => {
       state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true, source: s.source ?? null };
       render();

@@ -284,3 +284,32 @@ html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale
 .t-iq { font-size: .75rem; opacity: .8; }
 .iqamah-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin: 8px 0; }
 .iqamah-grid label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; }
+
+/* Månadsvy */
+.month-link { text-align: right; margin: -4px 0 4px; }
+.month-wrap { margin: 8px -10px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
+.month { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.month thead th { position: sticky; top: 0; z-index: 1; background: var(--card); color: var(--muted); font-size: .72rem; font-weight: 700; padding: 8px 0; border-bottom: 2px solid var(--border); }
+.month thead th:first-child { width: 17%; text-align: left; padding-left: 8px; }
+.month td, .month tbody th { padding: 9px 0; font-size: clamp(.82rem, 4vw, .95rem); text-align: center; }
+.month tbody th { text-align: left; padding-left: 8px; font-weight: 400; white-space: nowrap; }
+.month tbody th b { display: inline-block; min-width: 1.2em; font-size: 1rem; }
+.month tbody th span { color: var(--muted); font-size: .7rem; }
+.month tbody tr { cursor: pointer; }
+.month tbody tr:nth-child(even) { background: color-mix(in srgb, var(--border) 28%, transparent); }
+.month tr.past { opacity: .55; }
+.month tr.fri th span { color: var(--accent); font-weight: 700; }
+.month tr.fri td, .month tr.fri th { box-shadow: inset 0 0 0 99px var(--accent-soft); }
+.month tr.today { opacity: 1; background: var(--accent); }
+.month tr.today td, .month tr.today th, .month tr.today th span { color: #fff; font-weight: 700; box-shadow: none; }
+@media (prefers-color-scheme: dark) { .month tr.today td, .month tr.today th, .month tr.today th span { color: #0d1a14; } }
+.month-note { padding: 0 4px; }
+@media print {
+  .tabs, .top, .nav-arrow, .month-link, .month-note button { display: none !important; }
+  body, .month-wrap, .month thead th { background: #fff !important; color: #000 !important; padding-bottom: 0; }
+  .month-wrap { margin: 0; border: none; }
+  .month * { color: #000 !important; opacity: 1 !important; box-shadow: none !important; }
+  .month tbody tr { background: none !important; }
+  .month tr.fri, .month tr.today { font-weight: 700; background: #eee !important; }
+  .month td, .month tbody th { padding: 3px 0; }
+}
