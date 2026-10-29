@@ -7,6 +7,9 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.content.SharedPreferences;
+import android.app.NotificationManager;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -15,8 +18,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Small native helpers the web part cannot do itself. Needs no extra permissions:
- * it only reads status and opens the relevant system settings screens.
+ * Small native helpers the web part cannot do itself: reads status, opens system settings
+ * screens, updates the widget and sets the prayer alarm clocks (see AlarmScheduler).
  */
 @CapacitorPlugin(name = "SalahNative")
 public class SalahNativePlugin extends Plugin {
@@ -54,6 +57,56 @@ public class SalahNativePlugin extends Plugin {
         prefs.edit().putString(NextPrayerWidget.KEY, prayers.toString()).apply();
         NextPrayerWidget.refresh(getContext());
         call.resolve();
+    }
+
+    /** Replaces all prayer alarm clocks: alarms = [{ id, at (epoch ms), title, body }]. */
+    @PluginMethod
+    public void setAlarms(PluginCall call) {
+        JSArray alarms = call.getArray("alarms", new JSArray());
+        JSONArray clean = new JSONArray();
+        for (int i = 0; i < alarms.length(); i++) {
+            JSONObject a = alarms.optJSONObject(i);
+            if (a == null || a.optLong("at") <= 0) continue;
+            clean.put(a);
+        }
+        AlarmScheduler.replaceAll(getContext(), clean);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void cancelAlarms(PluginCall call) {
+        AlarmScheduler.cancelAll(getContext());
+        call.resolve();
+    }
+
+    /** Whether alarms may be exact and shown over the lock screen. */
+    @PluginMethod
+    public void alarmStatus(PluginCall call) {
+        Context ctx = getContext();
+        boolean fullScreen = true;
+        if (Build.VERSION.SDK_INT >= 34) {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            fullScreen = nm != null && nm.canUseFullScreenIntent();
+        }
+        JSObject ret = new JSObject();
+        ret.put("canScheduleExact", AlarmScheduler.canScheduleExact(ctx));
+        ret.put("canFullScreen", fullScreen);
+        call.resolve(ret);
+    }
+
+    /** which: 'exact' (Alarms & reminders) or 'fullscreen' (full-screen notifications). */
+    @PluginMethod
+    public void openAlarmSettings(PluginCall call) {
+        Uri pkg = Uri.fromParts("package", getContext().getPackageName(), null);
+        Intent intent;
+        if ("fullscreen".equals(call.getString("which")) && Build.VERSION.SDK_INT >= 34) {
+            intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg);
+        } else if ("exact".equals(call.getString("which")) && Build.VERSION.SDK_INT >= 31) {
+            intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg);
+        } else {
+            intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg);
+        }
+        startSettings(intent, call);
     }
 
     private void startSettings(Intent intent, PluginCall call) {

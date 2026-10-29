@@ -323,3 +323,14 @@ html[data-vt="month-prev"]::view-transition-new(day-pane) { animation: vtInScale
 .chip[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
 @media (prefers-color-scheme: dark) { .chip[aria-pressed="true"] { color: #0d1a14; } }
 .before .row { margin-top: 8px; align-items: center; }
+
+.alarm-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); min-height: 48px; }
+.alarm-name { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.alarm-name input { width: 22px; height: 22px; flex: none; }
+.alarm-name span { display: flex; flex-direction: column; }
+.alarm-name small { font-size: .78rem; }
+.alarm-row select { flex: none; max-width: 150px; }
+.alarm-next { font-weight: 600; margin: 8px 0; }
+.alarm-warn .warn-text { margin: 8px 0; }
+.alarm-warn .warn-text button { margin-top: 6px; }
+.alarm-note:empty, .alarm-next:empty { display: none; }

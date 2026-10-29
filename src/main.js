@@ -16,7 +16,8 @@ import { withEstimates } from './estimate.js';
 import { shareCalendar, shareFile } from './share.js';
 import { buildBackup, parseBackup, backupFileName } from './backup.js';
 import { addDays, sameDay, dayRow, step } from './daynav.js';
-import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
+import { batteryStatus, openBatterySettings, openNotificationSettings, alarmStatus, openAlarmSettings } from './native.js';
+import { ALARM_BEFORE, alarmTimes, alarmLabel } from './alarm.js';
 import { healthItems } from './health.js';
 import { hijriDate } from './hijri.js';
 import { monthRows, shiftMonth } from './month.js';
@@ -821,9 +822,11 @@ async function renderHealth(box) {
     'notification-settings': ['Öppna notisinställningar', openNotificationSettings],
     'exact-alarms': ['Tillåt exakta alarm', openExactAlarmSettings],
     'battery-settings': ['Öppna batteriinställningar', openBatterySettings],
+    'alarm-exact': ['Tillåt alarm och påminnelser', () => openAlarmSettings('exact')],
+    'alarm-fullscreen': ['Tillåt på låsskärmen', () => openAlarmSettings('fullscreen')],
     'add-schedule': ['Lägg till schema', () => show('import')],
   };
-  const items = healthItems(f, battery, hasToday).map((it) => ({ ...it, action: ACTIONS[it.action] }));
+  const items = healthItems(f, battery, hasToday, PRAYERS.some((p) => state.settings.alarms?.[p.key]?.on)).map((it) => ({ ...it, action: ACTIONS[it.action] }));
   const list = h('<ul class="health"></ul>');
   for (const it of items) {
     const li = h(`<li class="${it.ok ? 'ok' : 'bad'}"><span class="hi" aria-hidden="true">${it.ok ? '✅' : '⚠️'}</span>
@@ -865,6 +868,14 @@ function renderSettings() {
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
     <p class="muted msg" role="status" aria-live="polite"></p>
   </section>
+  <section class="card alarm"><h2>Alarm</h2>
+    <p class="muted">Ett riktigt alarm som ringer tills du stänger av det, även på låsskärmen. Det följer bönetiderna – du slipper ställa om klockan varje dag.</p>
+    <p class="muted alarm-note"></p>
+    <div class="alarm-warn"></div>
+    <p class="alarm-next" role="status" aria-live="polite"></p>
+    <div class="alarm-rows"></div>
+    <p class="muted alarm-msg" role="status" aria-live="polite"></p>
+  </section>
   <section class="card"><h2>Moskétavla</h2>
     <p class="muted">Visningen <b>Moskétavla</b> på Idag, som skärmen i moskén. Iqamah = minuter från
       böneutropet tills bönen börjar.</p>
@@ -902,6 +913,48 @@ function renderSettings() {
     const n = state.notifyResult;
     msg.textContent = n?.native ? `Sparat – ${n.scheduled ?? 0} notiser schemalagda.` : 'Sparat.';
   };
+  const alarmEl = (c) => card.querySelector(`.alarm-${c}`);
+  const platform = Capacitor.getPlatform();
+  alarmEl('note').textContent = platform === 'ios' ? 'På iPhone blir alarmet en notis med ljud (riktiga alarm kräver iOS 26).'
+    : isNative() ? '' : 'Alarm fungerar bara i den installerade appen.';
+  const drawAlarmWarn = async () => {
+    const warn = alarmEl('warn');
+    const st = platform === 'android' && PRAYERS.some((p) => s.alarms[p.key].on) ? await alarmStatus() : null;
+    const problems = [];
+    if (st?.canScheduleExact === false) problems.push(['Utan tillståndet "Alarm och påminnelser" kan alarmen inte ringa i tid.', 'Tillåt alarm', 'exact']);
+    if (st?.canFullScreen === false) problems.push(['Alarmet får inte visas över låsskärmen – du ser bara en notis.', 'Tillåt på låsskärmen', 'fullscreen']);
+    warn.replaceChildren(...problems.map(([text, label, which]) => {
+      const box = h(`<div class="warn-text"><span>${esc(text)}</span><br><button class="secondary small">${esc(label)}</button></div>`);
+      box.querySelector('button').onclick = async () => { await openAlarmSettings(which); setTimeout(drawAlarmWarn, 800); };
+      return box;
+    }));
+  };
+  const drawAlarms = () => {
+    const upcoming = alarmTimes(withEstimates(state.schedules, s), s, new Date(), 400);
+    const nextOf = (key) => upcoming.find((a) => a.key === key);
+    alarmEl('next').textContent = upcoming.length ? `Nästa alarm: ${alarmLabel(upcoming[0].at)}` : PRAYERS.some((p) => s.alarms[p.key].on) ? 'Inga alarm att visa – det finns inget schema framåt.' : '';
+    alarmEl('rows').replaceChildren(...PRAYERS.map((p) => {
+      const a = s.alarms[p.key];
+      const nxt = a.on && nextOf(p.key);
+      const row = h(`<div class="alarm-row"><label class="alarm-name"><input type="checkbox" ${a.on ? 'checked' : ''} aria-label="Alarm för ${p.name}"/>
+        <span>${p.name}${nxt ? `<small class="muted">${alarmLabel(nxt.at)}</small>` : ''}</span></label>
+        ${a.on ? `<select aria-label="Minuter innan ${p.name}">${ALARM_BEFORE.map((m) =>
+    `<option value="${m}" ${m === a.before ? 'selected' : ''}>${m === 0 ? 'Vid bönetiden' : `${m} min innan`}</option>`).join('')}</select>` : ''}</div>`);
+      row.querySelector('input').onchange = (e) => { a.on = e.target.checked; saveAlarms(); };
+      row.querySelector('select')?.addEventListener('change', (e) => { a.before = +e.target.value; saveAlarms(); });
+      return row;
+    }));
+    drawAlarmWarn();
+  };
+  const saveAlarms = async () => {
+    await saveSettings(s);
+    await refreshNotifications();
+    drawAlarms();
+    renderHealth(card.querySelector('.health-box'));
+    const n = state.notifyResult;
+    alarmEl('msg').textContent = n?.native ? `Sparat – ${n.alarms ?? 0} alarm inlagda.` : 'Sparat.';
+  };
+  drawAlarms();
   const rows = card.querySelector('.before-rows');
   const drawBefore = () => rows.replaceChildren(...PRAYERS.filter((p) => s.enabled[p.key]).map((p) => {
     const row = h(`<div class="chip-row"><span>${p.name}</span><div class="chips">${REMINDER_MINUTES.map((m) =>

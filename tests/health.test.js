@@ -29,3 +29,12 @@ test('iPhone shows the 64-notification budget and no Android-only rows', () => {
   assert.match(items.at(-1).text, /58 av 64 notiser inlagda/);
   assert.ok(items.at(-1).note);
 });
+
+test('alarm rows only when alarms are on, and only on Android', () => {
+  const facts = { platform: 'android', display: true, exact: true, pending: 3, alarm: { canScheduleExact: false, canFullScreen: true } };
+  assert.ok(!healthItems(facts, null, true).some((i) => i.id.startsWith('alarm')));
+  const items = healthItems(facts, null, true, true);
+  assert.equal(items.find((i) => i.id === 'alarm-exact').ok, false);
+  assert.equal(items.find((i) => i.id === 'alarm-fullscreen').ok, true);
+  assert.ok(!healthItems({ ...facts, platform: 'ios' }, null, true, true).some((i) => i.id.startsWith('alarm')));
+});

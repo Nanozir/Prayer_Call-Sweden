@@ -89,6 +89,47 @@ const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: J
   await page.close();
 }
 
+// --- Alarm clock: switch on Fajr 15 min before, Android gets real alarms ----------
+{
+  const page = await open({ platform: 'android', alarm: { canScheduleExact: false, canFullScreen: false }, storage });
+  check((await page.evaluate(() => window.__mock.alarms?.length ?? 0)) === 0, 'Alarm: inga alarm innan något slagits på');
+  await page.click('nav button[data-view=settings]');
+  await page.waitForSelector('.alarm-row');
+  await page.check('.alarm-row:first-child input'); // Fajr
+  await page.waitForFunction(() => window.__mock.alarms?.length > 0);
+  await page.waitForSelector('.alarm-row select');
+  const alarms = await page.evaluate(() => window.__mock.alarms);
+  const fajr9 = Date.UTC(2026, 9, 9) + (october.days[8][0] - 120 - 15) * 60_000; // 9 Oct is UTC+2
+  check(alarms.length === 14, `Alarm: ${alarms.length} alarm inlagda (max 14)`);
+  check(alarms[0].at === fajr9, `Alarm: första alarmet 15 min före Fajr (${new Date(alarms[0].at).toISOString()})`);
+  check(new Set(alarms.map((a) => a.id)).size === 14 && alarms.every((a) => a.title && a.body), 'Alarm: unika ID och text');
+  const next = await page.$eval('.alarm-next', (e) => e.textContent);
+  check(/^Nästa alarm: fre \d\d:\d\d$/.test(next), `Alarm: ${next}`);
+  check((await page.$$('.alarm-warn .warn-text')).length === 2, 'Alarm: varning när exakta alarm och låsskärm saknas');
+  await page.waitForSelector('.health li.bad >> text=Alarm');
+  await page.selectOption('.alarm-row:first-child select', '0');
+  await page.waitForFunction((t) => window.__mock.alarms?.[0]?.at === t, fajr9 + 15 * 60_000);
+  check(true, 'Alarm: 0 min innan ger alarm vid bönetiden');
+  await page.click('.alarm-warn .warn-text button >> nth=0');
+  await page.waitForTimeout(1200);
+  check((await page.$$('.alarm-warn .warn-text')).length === 1, 'Alarm: varningen försvinner efter att tillståndet getts');
+  await page.uncheck('.alarm-row:first-child input');
+  await page.waitForFunction(() => window.__mock.alarms.length === 0);
+  check(true, 'Alarm: avstängt alarm avbokas');
+  await page.close();
+}
+{
+  const page = await open({ platform: 'ios', storage: { ...storage, settings: JSON.stringify({ alarms: { fajr: { on: true, before: 15 } } }) } });
+  const pending = await page.evaluate(() => window.__mock.pending);
+  const al = pending.filter((n) => n.id % 16 === 8);
+  check(al.length === 8 && pending.length <= 64, `iPhone: alarm blir ${al.length} notiser, totalt ${pending.length} (max 64)`);
+  check(new Date(al[0].schedule.at).getTime() === Date.UTC(2026, 9, 9) + (october.days[8][0] - 135) * 60_000, 'iPhone: alarmnotis 15 min före Fajr');
+  check((await page.evaluate(() => window.__mock.alarms)) === undefined, 'iPhone: inga Android-alarm');
+  await page.click('nav button[data-view=settings]');
+  check(/riktiga alarm kräver iOS 26/.test(await page.$eval('.alarm-note', (e) => e.textContent)), 'iPhone: not om alarm i inställningarna');
+  await page.close();
+}
+
 // --- Backup: export on one phone, import on a fresh install ----------------------
 let backupText;
 {

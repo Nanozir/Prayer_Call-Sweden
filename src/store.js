@@ -2,6 +2,7 @@
 // falls back to localStorage in a normal browser).
 
 import { Preferences } from '@capacitor/preferences';
+import { cleanAlarms, defaultAlarms } from './alarm.js';
 import { monthKey, nowInStockholm, daysInMonth, PRAYERS } from './time.js';
 
 const SCHEDULES = 'schedules';
@@ -24,6 +25,7 @@ export function cleanBefore(before, offset) {
 export const DEFAULT_SETTINGS = {
   enabled: { fajr: true, shuruk: false, dhohr: true, asr: true, magrib: true, isha: true },
   before: NO_REMINDERS(), // per prayer: extra reminders N minutes before (REMINDER_MINUTES)
+  alarms: defaultAlarms(), // per prayer: { on, before } – real alarm clock `before` minutes ahead (ALARM_BEFORE)
   offset: 0, // legacy single reminder, only migrated into `before` (kept readable for old backups)
   sound: 'chime', // 'bells' | 'chime' | 'off' – sound at the prayer time
   reminders: true, // remind when a schedule is about to run out
@@ -60,7 +62,7 @@ export async function deleteSchedule(key) {
 
 export async function loadSettings() {
   const s = await getJson(SETTINGS, {});
-  return { ...DEFAULT_SETTINGS, ...s, enabled: { ...DEFAULT_SETTINGS.enabled, ...(s.enabled ?? {}) }, before: cleanBefore(s.before, s.offset) };
+  return { ...DEFAULT_SETTINGS, ...s, enabled: { ...DEFAULT_SETTINGS.enabled, ...(s.enabled ?? {}) }, before: cleanBefore(s.before, s.offset), alarms: cleanAlarms(s.alarms) };
 }
 
 export async function saveSettings(settings) {

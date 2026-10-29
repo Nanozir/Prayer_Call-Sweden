@@ -4,7 +4,7 @@
 (() => {
   const cfg = Object.assign({
     platform: 'android', display: 'granted', exact: 'granted',
-    battery: { unrestricted: true, manufacturer: 'Google' }, storage: {},
+    battery: { unrestricted: true, manufacturer: 'Google' }, alarm: { canScheduleExact: true, canFullScreen: true }, storage: {},
   }, window.__mockConfig || {});
   const mock = window.__mock = { calls: [], pending: [], channels: {}, storage: { ...cfg.storage }, cfg };
   const handlers = {
@@ -33,6 +33,10 @@
       openBatterySettings: () => { cfg.battery = { ...cfg.battery, unrestricted: true }; return {}; },
       openNotificationSettings: () => { cfg.display = 'granted'; return {}; },
       updateWidget: (data) => { mock.widget = data; return {}; },
+      setAlarms: ({ alarms }) => { (mock.alarmCalls ||= []).push(alarms); mock.alarms = alarms; return {}; },
+      cancelAlarms: () => { mock.alarms = []; return {}; },
+      alarmStatus: () => cfg.alarm,
+      openAlarmSettings: ({ which }) => { cfg.alarm = { ...cfg.alarm, [which === 'exact' ? 'canScheduleExact' : 'canFullScreen']: true }; return {}; },
     },
     App: {},
     Share: { share: (o) => ({}) },

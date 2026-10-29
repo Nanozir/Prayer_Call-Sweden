@@ -38,6 +38,31 @@
                 android:resource="@xml/next_prayer_widget_info" />
         </receiver>
 
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
+
+        <receiver android:name=".AlarmBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".AlarmService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
+
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:excludeFromRecents="true" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -52,6 +77,16 @@
     <!-- Permissions
          INTERNET: required by the Android WebView that renders the app (it only loads the
          app's own bundled files; the app makes no requests to any server).
-         Notification/alarm/boot permissions come from @capacitor/local-notifications. -->
+         Notification/alarm/boot permissions also come from @capacitor/local-notifications.
+         Alarm clocks: SCHEDULE_EXACT_ALARM (user-granted; not USE_EXACT_ALARM, which Play restricts),
+         full-screen alarm over the lock screen, a foreground service that rings (type systemExempted),
+         keep the CPU awake while ringing and vibrate. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>
