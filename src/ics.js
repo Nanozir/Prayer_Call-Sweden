@@ -45,10 +45,10 @@ export function buildIcs(sched, settings, now = new Date()) {
         'TRANSP:TRANSPARENT',
         'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeText(`Det är dags för ${prayer.name}`)}`, 'TRIGGER:PT0M', 'END:VALARM',
       );
-      if (settings.offset) {
+      for (const m of settings.before?.[prayer.key] ?? []) {
         lines.push('BEGIN:VALARM', 'ACTION:DISPLAY',
-          `DESCRIPTION:${escapeText(`Påminnelse: ${prayer.name} om ${settings.offset} min`)}`,
-          `TRIGGER:-PT${settings.offset}M`, 'END:VALARM');
+          `DESCRIPTION:${escapeText(`Påminnelse: ${prayer.name} om ${m} min`)}`,
+          `TRIGGER:-PT${m}M`, 'END:VALARM');
       }
       lines.push('END:VEVENT');
     });

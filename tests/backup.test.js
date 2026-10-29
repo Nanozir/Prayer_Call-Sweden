@@ -6,13 +6,13 @@ import { DEFAULT_SETTINGS } from '../src/store.js';
 const oct = { year: 2026, month: 10, days: Array.from({ length: 31 }, () => [293, 429, 776, 948, 1122, 1249]) };
 
 test('round trip keeps schedules and settings, drops estimated months', () => {
-  const settings = { ...DEFAULT_SETTINGS, sound: 'adhan', offset: 10, hijriOffset: -1 };
+  const settings = { ...DEFAULT_SETTINGS, sound: 'adhan', before: { ...DEFAULT_SETTINGS.before, dhohr: [10, 5] }, hijriOffset: -1 };
   const text = buildBackup({ '2026-10': oct, '2026-11': { ...oct, month: 11, estimated: true } }, settings, '1.7.0');
   const back = parseBackup(text);
   assert.deepEqual(Object.keys(back.schedules), ['2026-10']);
   assert.deepEqual(back.schedules['2026-10'].days, oct.days);
   assert.equal(back.settings.sound, 'adhan');
-  assert.equal(back.settings.offset, 10);
+  assert.deepEqual(back.settings.before.dhohr, [5, 10]);
   assert.equal(back.settings.hijriOffset, -1);
 });
 
@@ -28,6 +28,7 @@ test('rejects foreign files and skips broken schedules', () => {
   assert.deepEqual(Object.keys(back.schedules), ['2026-10']);
   assert.equal(back.skipped, 2);
   assert.equal(back.settings.sound, DEFAULT_SETTINGS.sound);
-  assert.equal(back.settings.offset, DEFAULT_SETTINGS.offset);
+  assert.deepEqual(back.settings.before.fajr, [])
+  assert.deepEqual(parseBackup(JSON.stringify({ kind: 'salah-kalender-backup', format: 1, settings: { offset: 15 } })).settings.before.isha, [15]);
   assert.equal(back.settings.enabled.fajr, true);
 });

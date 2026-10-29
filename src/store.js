@@ -7,9 +7,24 @@ import { monthKey, nowInStockholm, daysInMonth, PRAYERS } from './time.js';
 const SCHEDULES = 'schedules';
 const SETTINGS = 'settings';
 
+export const REMINDER_MINUTES = [5, 10, 15, 20, 30, 45, 60];
+const NO_REMINDERS = () => Object.fromEntries(PRAYERS.map((p) => [p.key, []]));
+
+// Clean per-prayer reminder lists; a missing list falls back to the old single `offset`.
+export function cleanBefore(before, offset) {
+  const out = NO_REMINDERS();
+  for (const p of PRAYERS) {
+    const v = before && typeof before === 'object' ? before[p.key] : undefined;
+    const list = Array.isArray(v) ? v : (!before && REMINDER_MINUTES.includes(offset) ? [offset] : []);
+    out[p.key] = REMINDER_MINUTES.filter((m) => list.includes(m));
+  }
+  return out;
+}
+
 export const DEFAULT_SETTINGS = {
   enabled: { fajr: true, shuruk: false, dhohr: true, asr: true, magrib: true, isha: true },
-  offset: 0, // extra reminder this many minutes before the prayer time (0 = none)
+  before: NO_REMINDERS(), // per prayer: extra reminders N minutes before (REMINDER_MINUTES)
+  offset: 0, // legacy single reminder, only migrated into `before` (kept readable for old backups)
   sound: 'chime', // 'bells' | 'chime' | 'off' – sound at the prayer time
   reminders: true, // remind when a schedule is about to run out
   estimate: false, // emergency mode: calculate times when no mosque schedule exists
@@ -45,7 +60,7 @@ export async function deleteSchedule(key) {
 
 export async function loadSettings() {
   const s = await getJson(SETTINGS, {});
-  return { ...DEFAULT_SETTINGS, ...s, enabled: { ...DEFAULT_SETTINGS.enabled, ...(s.enabled ?? {}) } };
+  return { ...DEFAULT_SETTINGS, ...s, enabled: { ...DEFAULT_SETTINGS.enabled, ...(s.enabled ?? {}) }, before: cleanBefore(s.before, s.offset) };
 }
 
 export async function saveSettings(settings) {

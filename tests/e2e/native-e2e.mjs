@@ -41,7 +41,7 @@ async function open(config, shot) {
   return page;
 }
 
-const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: JSON.stringify({ offset: 10, sound: 'adhan' }) };
+const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: JSON.stringify({ before: { fajr: [10], dhohr: [10, 5], asr: [10], magrib: [10], isha: [10] }, sound: 'adhan' }) };
 
 // --- Android: exact alarms off, battery optimised (OnePlus) ---------------------
 {
@@ -111,7 +111,7 @@ let backupText;
   await page.setInputFiles('[data-f=import]', file);
   await page.waitForFunction(() => /Importerat/.test(document.querySelector('.backup-msg')?.textContent ?? ''));
   const pending = await page.evaluate(() => window.__mock.pending.length);
-  check(pending === 240, `Säkerhetskopia: efter import på ny telefon är notiserna tillbaka (${pending})`);
+  check(pending === 264, `Säkerhetskopia: efter import på ny telefon är notiserna tillbaka (${pending})`);
   await page.click('nav button[data-view=home]');
   const fajr = await page.$eval('.prayer .p-time', (e) => e.textContent);
   check(fajr === '05:11', 'Säkerhetskopia: dagens tider visas efter import');
