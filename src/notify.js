@@ -5,7 +5,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { PRAYERS, stockholmToDate, monthLabel, MONTHS_SV } from './time.js';
-import { coverageEnd, scheduleStatus } from './store.js';
+import { coverageEnd, scheduleStatus, REMINDER_MINUTES } from './store.js';
 import { withEstimates } from './estimate.js';
 import { updateWidget } from './native.js';
 
@@ -66,6 +66,11 @@ export async function openExactAlarmSettings() {
   try { await LocalNotifications.changeExactNotificationSetting(); } catch { /* not Android */ }
 }
 
+// Stable ids, all < REMINDER_ID_BASE: ((yy*12+m-1)*31+d-1)*6+prayer, times 16, plus a slot.
+// Slot 0 = on time, 1..7 = reminder by index in REMINDER_MINUTES, 8..15 free (e.g. a future alarm).
+// Max for 2099-12-31 is 3 570 000 or so, far below 2^31 and REMINDER_ID_BASE.
+export const notificationId = (year, month, day, p, slot) => ((((year - 2000) * 12 + month - 1) * 31 + day - 1) * 6 + p) * 16 + slot;
+
 export function prayerNotifications(schedules, settings, now) {
   const list = [];
   for (const sched of Object.values(schedules)) {
@@ -77,23 +82,25 @@ export function prayerNotifications(schedules, settings, now) {
         const time = stockholmToDate(sched.year, sched.month, d + 1, minutes);
         if (time <= now) return;
         const hhmm = time.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
-        const base = (sched.year * 10000 + sched.month * 100 + d + 1) * 10 + p;
+        const idAt = (slot) => notificationId(sched.year, sched.month, d + 1, p, slot);
         // Always notify at the prayer time itself, so a reminder is never mistaken for it.
         const note = sched.estimated ? ' – beräknad tid, kan avvika' : ' (Karlstads moské)';
         list.push({
-          id: base * 2,
+          id: idAt(0),
           title: `Det är dags för ${prayer.name}${sched.estimated ? ' (beräknad)' : ''}`,
           body: `${prayer.name} ${hhmm}${note}`,
           schedule: { at: time, allowWhileIdle: true },
           channelId: prayerChannel(settings.sound),
         });
-        const before = new Date(time.getTime() - settings.offset * 60_000);
-        if (settings.offset && before > now) {
+        for (const m of settings.before?.[prayer.key] ?? []) {
+          const i = REMINDER_MINUTES.indexOf(m);
+          const at = new Date(time.getTime() - m * 60_000);
+          if (i < 0 || at <= now) continue;
           list.push({
-            id: base * 2 + 1,
-            title: `Påminnelse: ${prayer.name} om ${settings.offset} min`,
+            id: idAt(i + 1),
+            title: `Påminnelse: ${prayer.name} om ${m} min`,
             body: `Inte bönetid än – ${prayer.name} är ${hhmm}.`,
-            schedule: { at: before, allowWhileIdle: true },
+            schedule: { at, allowWhileIdle: true },
             channelId: beforeChannel(settings.sound),
           });
         }

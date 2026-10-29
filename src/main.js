@@ -5,7 +5,7 @@ import {
 } from './time.js';
 import {
   loadSchedules, saveSchedule, deleteSchedule, loadSettings, saveSettings,
-  scheduleStatus, todaysTimes, coverageEnd, nextPrayer,
+  scheduleStatus, todaysTimes, coverageEnd, nextPrayer, REMINDER_MINUTES,
 } from './store.js';
 import {
   rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative, SOUND_OPTIONS,
@@ -791,8 +791,9 @@ function renderSettings() {
       <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
     <div class="row sound-row"><button class="secondary small" data-a="listen">▶ Lyssna</button>
       <span class="muted">Ljuden är lågmälda från början. De följer telefonens notisvolym och hörs inte i tyst läge.</span></div>
-    <div class="toggle"><span>Extra påminnelse innan<br><small class="muted">Notisen vid bönetiden kommer alltid också</small></span>
-      <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Ingen'}</option>`).join('')}</select></div>
+    <div class="before"><h3>Extra påminnelser innan<br><small class="muted">Minuter före bönetiden. Notisen vid bönetiden kommer alltid också</small></h3><div class="before-rows"></div>
+      <div class="row"><select data-a="before-from" aria-label="Kopiera från bön">${PRAYERS.map((p) => `<option value="${p.key}">${p.name}</option>`).join('')}</select>
+        <button class="secondary small" data-a="before-all">Samma för alla</button></div></div>
     <label class="toggle"><span>Påminn när schemat håller på att gå ut</span><input type="checkbox" data-f="reminders" ${s.reminders ? 'checked' : ''}/></label>
     <div class="toggle"><span>Justera hijri-datum<br><small class="muted">Om moskén följer månsyn</small></span>
       <select data-f="hijri">${[-2, -1, 0, 1, 2].map((n) => `<option value="${n}" ${n === (s.hijriOffset ?? 0) ? 'selected' : ''}>${n === 0 ? 'Ingen justering' : `${n > 0 ? '+' : '−'}${Math.abs(n)} dag${Math.abs(n) === 1 ? '' : 'ar'}`}</option>`).join('')}</select></div>
@@ -830,7 +831,7 @@ function renderSettings() {
   const box = card.querySelector('.prayers');
   PRAYERS.forEach((p) => {
     const t = h(`<label class="toggle"><span>${p.name}${p.key === 'shuruk' ? ' <span class="muted">(soluppgång)</span>' : ''}</span><input type="checkbox" ${s.enabled[p.key] ? 'checked' : ''}/></label>`);
-    t.querySelector('input').onchange = (e) => { s.enabled[p.key] = e.target.checked; persist(); };
+    t.querySelector('input').onchange = (e) => { s.enabled[p.key] = e.target.checked; drawBefore(); persist(); };
     box.append(t);
   });
   const msg = card.querySelector('.msg');
@@ -840,7 +841,24 @@ function renderSettings() {
     const n = state.notifyResult;
     msg.textContent = n?.native ? `Sparat – ${n.scheduled ?? 0} notiser schemalagda.` : 'Sparat.';
   };
-  card.querySelector('[data-f=offset]').onchange = (e) => { s.offset = +e.target.value; persist(); };
+  const rows = card.querySelector('.before-rows');
+  const drawBefore = () => rows.replaceChildren(...PRAYERS.filter((p) => s.enabled[p.key]).map((p) => {
+    const row = h(`<div class="chip-row"><span>${p.name}</span><div class="chips">${REMINDER_MINUTES.map((m) =>
+      `<button type="button" class="chip" data-m="${m}" aria-pressed="${s.before[p.key].includes(m)}">${m}</button>`).join('')}</div></div>`);
+    row.onclick = (e) => {
+      const m = +e.target.closest('.chip')?.dataset.m;
+      if (!m) return;
+      s.before[p.key] = s.before[p.key].includes(m) ? s.before[p.key].filter((x) => x !== m) : [...s.before[p.key], m].sort((a, b) => a - b);
+      drawBefore(); persist();
+    };
+    return row;
+  }));
+  drawBefore();
+  card.querySelector('[data-a=before-all]').onclick = () => {
+    const from = card.querySelector('[data-a=before-from]').value;
+    PRAYERS.forEach((p) => { s.before[p.key] = [...s.before[from]]; });
+    drawBefore(); persist();
+  };
   card.querySelector('[data-f=sound]').onchange = (e) => { s.sound = e.target.value; persist(); };
   let preview = null;
   card.querySelector('[data-a=listen]').onclick = () => {
