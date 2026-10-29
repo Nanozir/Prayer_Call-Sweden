@@ -80,3 +80,8 @@ export function monthKey(year, month) {
 export function monthLabel(year, month) {
   return `${MONTHS_SV[month - 1]} ${year}`;
 }
+
+// Stable ids, all < REMINDER_ID_BASE: ((yy*12+m-1)*31+d-1)*6+prayer, times 16, plus a slot.
+// Slot 0 = on time, 1..7 = reminder by index in REMINDER_MINUTES, 8 = alarm (src/alarm.js), 9..15 free.
+// Max for 2099-12-31 is 3 570 000 or so, far below 2^31 and REMINDER_ID_BASE.
+export const notificationId = (year, month, day, p, slot) => ((((year - 2000) * 12 + month - 1) * 31 + day - 1) * 6 + p) * 16 + slot;

@@ -1,7 +1,8 @@
 // Backup of schedules and settings as a small JSON file, e.g. to move to a new
 // phone or to the Google Play version of the app. Imports are validated strictly.
 import { daysInMonth, monthKey } from './time.js';
-import { DEFAULT_SETTINGS } from './store.js';
+import { DEFAULT_SETTINGS, cleanBefore } from './store.js';
+import { cleanAlarms } from './alarm.js';
 
 const KIND = 'salah-kalender-backup';
 
@@ -35,6 +36,8 @@ function cleanSettings(s) {
     if (typeof s.enabled?.[key] === 'boolean') out.enabled[key] = s.enabled[key];
   }
   if ([0, 5, 10, 15, 20, 30].includes(s.offset)) out.offset = s.offset;
+  out.before = cleanBefore(s.before, s.offset);
+  out.alarms = cleanAlarms(s.alarms);
   if (['adhan', 'bells', 'chime', 'off'].includes(s.sound)) out.sound = s.sound;
   if (typeof s.reminders === 'boolean') out.reminders = s.reminders;
   if (typeof s.estimate === 'boolean') out.estimate = s.estimate;

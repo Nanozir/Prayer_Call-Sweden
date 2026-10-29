@@ -14,3 +14,7 @@ export const batteryStatus = () => call('batteryStatus');
 export const openBatterySettings = () => call('openBatterySettings');
 export const openNotificationSettings = () => call('openNotificationSettings');
 export const updateWidget = (data) => call('updateWidget', data);
+export const setAlarms = (alarms) => call('setAlarms', { alarms });
+export const cancelAlarms = () => call('cancelAlarms');
+export const alarmStatus = () => call('alarmStatus');
+export const openAlarmSettings = (which) => call('openAlarmSettings', { which });

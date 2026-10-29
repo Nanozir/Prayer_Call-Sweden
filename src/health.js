@@ -4,10 +4,10 @@ const day = (d) => d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long'
 
 /**
  * facts: from notificationFacts(); battery: {unrestricted, manufacturer} | null;
- * hasToday: whether today has (real or estimated) prayer times.
+ * hasToday: whether today has (real or estimated) prayer times; alarmsOn: any prayer alarm is switched on.
  * Returns [{ id, ok, text, note?, action? }] where action is an id the UI maps to a button.
  */
-export function healthItems(facts, battery, hasToday) {
+export function healthItems(facts, battery, hasToday, alarmsOn = false) {
   const android = facts.platform === 'android';
   const items = [{
     id: 'display', ok: facts.display,
@@ -19,6 +19,18 @@ export function healthItems(facts, battery, hasToday) {
       id: 'exact', ok: facts.exact !== false,
       text: facts.exact !== false ? 'Exakta alarm är tillåtna' : 'Utan exakta alarm kan notiserna komma flera minuter sent.',
       action: 'exact-alarms',
+    });
+  }
+  if (android && alarmsOn && facts.alarm) {
+    const { canScheduleExact, canFullScreen } = facts.alarm;
+    items.push({
+      id: 'alarm-exact', ok: canScheduleExact !== false,
+      text: canScheduleExact !== false ? 'Alarmen får ringa exakt' : 'Alarmen kan inte ringa utan tillståndet "Alarm och påminnelser".',
+      action: 'alarm-exact',
+    }, {
+      id: 'alarm-fullscreen', ok: canFullScreen !== false,
+      text: canFullScreen !== false ? 'Alarmen får visas på låsskärmen' : 'Alarmet får inte visas över låsskärmen – du ser bara en notis.',
+      action: 'alarm-fullscreen',
     });
   }
   if (battery) {

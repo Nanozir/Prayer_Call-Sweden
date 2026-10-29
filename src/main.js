@@ -5,7 +5,7 @@ import {
 } from './time.js';
 import {
   loadSchedules, saveSchedule, deleteSchedule, loadSettings, saveSettings,
-  scheduleStatus, todaysTimes, coverageEnd, nextPrayer,
+  scheduleStatus, todaysTimes, coverageEnd, nextPrayer, REMINDER_MINUTES,
 } from './store.js';
 import {
   rescheduleAll, ensurePermissions, openExactAlarmSettings, testNotification, isNative, SOUND_OPTIONS,
@@ -16,15 +16,17 @@ import { withEstimates } from './estimate.js';
 import { shareCalendar, shareFile } from './share.js';
 import { buildBackup, parseBackup, backupFileName } from './backup.js';
 import { addDays, sameDay, dayRow, step } from './daynav.js';
-import { batteryStatus, openBatterySettings, openNotificationSettings } from './native.js';
+import { batteryStatus, openBatterySettings, openNotificationSettings, alarmStatus, openAlarmSettings } from './native.js';
+import { ALARM_BEFORE, alarmTimes, alarmLabel } from './alarm.js';
 import { healthItems } from './health.js';
 import { hijriDate } from './hijri.js';
+import { monthRows, shiftMonth } from './month.js';
 import { boardHtml, BOARD_PRAYERS } from './board.js';
 import { qiblaBearing, distanceKm, headingFromEvent, turnBy, compassWord } from './qibla.js';
 import { Capacitor } from '@capacitor/core';
 
 const app = document.getElementById('app');
-const state = { view: 'home', viewDate: null, anim: null, schedules: {}, settings: null, notifyResult: null, perms: null, draft: null };
+const state = { view: 'home', viewDate: null, anim: null, schedules: {}, settings: null, notifyResult: null, perms: null, draft: null, monthSel: null };
 
 const ICON = {
   bellOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>',
@@ -44,9 +46,14 @@ document.querySelectorAll('.tabs button').forEach((b) => {
 function show(view) {
   if (view === 'home' && state.view !== 'home') state.viewDate = null;
   state.view = view;
-  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === (view === 'month' ? 'home' : view)));
   render();
   window.scrollTo(0, 0);
+}
+
+function openMonth(year, month) {
+  state.monthSel = { year, month };
+  show('month');
 }
 
 function render() {
@@ -54,6 +61,7 @@ function render() {
   stopCompass?.();
   clearInterval(clockTimer);
   if (state.view === 'home') renderHome();
+  else if (state.view === 'month') renderMonth();
   else if (state.view === 'import') renderImport();
   else if (state.view === 'qibla') renderQibla();
   else renderSettings();
@@ -168,6 +176,9 @@ function renderHome() {
     };
   });
   app.append(viewSwitch);
+  const monthBtn = h('<div class="month-link"><button class="link" data-a="month">📅 Månadsvy</button></div>');
+  monthBtn.querySelector('button').onclick = () => openMonth(date.year, date.month);
+  app.append(monthBtn);
 
   const pane = h('<div class="day-pane"></div>');
   if (state.anim) {
@@ -323,6 +334,56 @@ function setupSwipe() {
   }, { passive: true });
 }
 
+function renderMonth() {
+  const today = nowInStockholm();
+  const shown = withEstimates(state.schedules, state.settings, today);
+  const sel = state.monthSel ?? { year: today.year, month: today.month };
+  const sched = shown[monthKey(sel.year, sel.month)];
+  const can = (d) => {
+    const to = shiftMonth(sel, d);
+    return !!(shown[monthKey(to.year, to.month)] || sched);
+  };
+  const go = (d) => { state.monthSel = shiftMonth(sel, d); render(); window.scrollTo(0, 0); };
+  const nav = h(`<div class="day-nav">
+    <button class="nav-arrow" aria-label="Föregående månad" ${can(-1) ? '' : 'disabled'}>‹</button>
+    <div class="nav-label"><span class="nav-day">${monthLabel(sel.year, sel.month)}</span>
+      ${sched?.estimated ? '<span class="est-badge">Beräknade tider</span>' : ''}</div>
+    <button class="nav-arrow" aria-label="Nästa månad" ${can(1) ? '' : 'disabled'}>›</button>
+  </div>`);
+  const [prev, next] = nav.querySelectorAll('.nav-arrow');
+  prev.onclick = () => go(-1);
+  next.onclick = () => go(1);
+  app.append(nav);
+
+  if (!sched) {
+    const card = h(`<section class="card no-schedule"><div class="no-schedule-icon">📅</div>
+      <h2>Inget schema för ${monthLabel(sel.year, sel.month)}</h2>
+      <p class="muted">Lägg till månadens schema under Scheman så visas alla tider här.</p>
+      <button data-a="import">Lägg till schema</button></section>`);
+    card.querySelector('button').onclick = () => show('import');
+    app.append(card);
+    return;
+  }
+  const rows = monthRows(sched, today).map((r) => `<tr data-day="${r.day}" class="${[r.today && 'today', r.past && 'past', r.friday && 'fri'].filter(Boolean).join(' ')}">
+    <th scope="row"><b>${r.day}</b> <span>${r.wd}</span></th>${r.times.map((t) => `<td>${t == null ? '–' : fmt(t)}</td>`).join('')}</tr>`).join('');
+  const wrap = h(`<div class="month-wrap"><table class="month">
+    <thead><tr><th>Dag</th>${PRAYERS.map((p) => `<th>${p.name}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`);
+  wrap.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.onclick = () => {
+      const d = { year: sel.year, month: sel.month, day: +tr.dataset.day };
+      state.view = 'home';
+      state.viewDate = sameDay(d, today) ? null : d;
+      document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === 'home'));
+      render();
+      window.scrollTo(0, 0);
+    };
+  });
+  app.append(wrap);
+  app.append(h(`<p class="muted small-text month-note">${sched.estimated ? 'Beräknade tider – inte moskéns eget schema. ' : ''}Fredagar (Jumua) är markerade. Tryck på en dag för att öppna den.</p>`));
+  const tr = wrap.querySelector('tr.today');
+  if (tr) setTimeout(() => tr.scrollIntoView({ block: 'center' }));
+}
+
 function renderScheduleList() {
   const today = nowInStockholm();
   const list = Object.entries(state.schedules).sort(([a], [b]) => (a < b ? 1 : -1));
@@ -336,7 +397,8 @@ function renderScheduleList() {
   for (const [key, s] of list) {
     const st = scheduleStatus(s, today);
     const li = h(`<li><span class="sched-name">${monthLabel(s.year, s.month)}<span class="badge ${st}">${labels[st]}</span>${s.source === 'islam.nu' ? '<span class="badge source">islam.nu</span>' : ''}</span>
-      <span class="row"><button class="secondary small" data-a="edit">Visa / ändra</button><button class="secondary small" data-a="ics" title="Dela till kalender (t.ex. iPhone)">📅 Kalender</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
+      <span class="row"><button class="secondary small" data-a="month">Månadsvy</button><button class="secondary small" data-a="edit">Visa / ändra</button><button class="secondary small" data-a="ics" title="Dela till kalender (t.ex. iPhone)">📅 Kalender</button><button class="danger small" data-a="del">Ta bort</button></span></li>`);
+    li.querySelector('[data-a=month]').onclick = () => openMonth(s.year, s.month);
     li.querySelector('[data-a=edit]').onclick = () => {
       state.draft = { year: s.year, month: s.month, days: s.days.map((r) => [...r]), flags: s.days.map(() => new Array(6).fill('ok')), existing: true, source: s.source ?? null };
       render();
@@ -760,9 +822,11 @@ async function renderHealth(box) {
     'notification-settings': ['Öppna notisinställningar', openNotificationSettings],
     'exact-alarms': ['Tillåt exakta alarm', openExactAlarmSettings],
     'battery-settings': ['Öppna batteriinställningar', openBatterySettings],
+    'alarm-exact': ['Tillåt alarm och påminnelser', () => openAlarmSettings('exact')],
+    'alarm-fullscreen': ['Tillåt på låsskärmen', () => openAlarmSettings('fullscreen')],
     'add-schedule': ['Lägg till schema', () => show('import')],
   };
-  const items = healthItems(f, battery, hasToday).map((it) => ({ ...it, action: ACTIONS[it.action] }));
+  const items = healthItems(f, battery, hasToday, PRAYERS.some((p) => state.settings.alarms?.[p.key]?.on)).map((it) => ({ ...it, action: ACTIONS[it.action] }));
   const list = h('<ul class="health"></ul>');
   for (const it of items) {
     const li = h(`<li class="${it.ok ? 'ok' : 'bad'}"><span class="hi" aria-hidden="true">${it.ok ? '✅' : '⚠️'}</span>
@@ -791,8 +855,9 @@ function renderSettings() {
       <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
     <div class="row sound-row"><button class="secondary small" data-a="listen">▶ Lyssna</button>
       <span class="muted">Ljuden är lågmälda från början. De följer telefonens notisvolym och hörs inte i tyst läge.</span></div>
-    <div class="toggle"><span>Extra påminnelse innan<br><small class="muted">Notisen vid bönetiden kommer alltid också</small></span>
-      <select data-f="offset">${[0, 5, 10, 15, 20, 30].map((m) => `<option value="${m}" ${m === s.offset ? 'selected' : ''}>${m ? `${m} min innan` : 'Ingen'}</option>`).join('')}</select></div>
+    <div class="before"><h3>Extra påminnelser innan<br><small class="muted">Minuter före bönetiden. Notisen vid bönetiden kommer alltid också</small></h3><div class="before-rows"></div>
+      <div class="row"><select data-a="before-from" aria-label="Kopiera från bön">${PRAYERS.map((p) => `<option value="${p.key}">${p.name}</option>`).join('')}</select>
+        <button class="secondary small" data-a="before-all">Samma för alla</button></div></div>
     <label class="toggle"><span>Påminn när schemat håller på att gå ut</span><input type="checkbox" data-f="reminders" ${s.reminders ? 'checked' : ''}/></label>
     <div class="toggle"><span>Justera hijri-datum<br><small class="muted">Om moskén följer månsyn</small></span>
       <select data-f="hijri">${[-2, -1, 0, 1, 2].map((n) => `<option value="${n}" ${n === (s.hijriOffset ?? 0) ? 'selected' : ''}>${n === 0 ? 'Ingen justering' : `${n > 0 ? '+' : '−'}${Math.abs(n)} dag${Math.abs(n) === 1 ? '' : 'ar'}`}</option>`).join('')}</select></div>
@@ -802,6 +867,14 @@ function renderSettings() {
       <input type="checkbox" data-f="estimate" ${s.estimate ? 'checked' : ''}/></div>
     <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
     <p class="muted msg" role="status" aria-live="polite"></p>
+  </section>
+  <section class="card alarm"><h2>Alarm</h2>
+    <p class="muted">Ett riktigt alarm som ringer tills du stänger av det, även på låsskärmen. Det följer bönetiderna – du slipper ställa om klockan varje dag.</p>
+    <p class="muted alarm-note"></p>
+    <div class="alarm-warn"></div>
+    <p class="alarm-next" role="status" aria-live="polite"></p>
+    <div class="alarm-rows"></div>
+    <p class="muted alarm-msg" role="status" aria-live="polite"></p>
   </section>
   <section class="card"><h2>Moskétavla</h2>
     <p class="muted">Visningen <b>Moskétavla</b> på Idag, som skärmen i moskén. Iqamah = minuter från
@@ -830,7 +903,7 @@ function renderSettings() {
   const box = card.querySelector('.prayers');
   PRAYERS.forEach((p) => {
     const t = h(`<label class="toggle"><span>${p.name}${p.key === 'shuruk' ? ' <span class="muted">(soluppgång)</span>' : ''}</span><input type="checkbox" ${s.enabled[p.key] ? 'checked' : ''}/></label>`);
-    t.querySelector('input').onchange = (e) => { s.enabled[p.key] = e.target.checked; persist(); };
+    t.querySelector('input').onchange = (e) => { s.enabled[p.key] = e.target.checked; drawBefore(); persist(); };
     box.append(t);
   });
   const msg = card.querySelector('.msg');
@@ -840,7 +913,66 @@ function renderSettings() {
     const n = state.notifyResult;
     msg.textContent = n?.native ? `Sparat – ${n.scheduled ?? 0} notiser schemalagda.` : 'Sparat.';
   };
-  card.querySelector('[data-f=offset]').onchange = (e) => { s.offset = +e.target.value; persist(); };
+  const alarmEl = (c) => card.querySelector(`.alarm-${c}`);
+  const platform = Capacitor.getPlatform();
+  alarmEl('note').textContent = platform === 'ios' ? 'På iPhone blir alarmet en notis med ljud (riktiga alarm kräver iOS 26).'
+    : isNative() ? '' : 'Alarm fungerar bara i den installerade appen.';
+  const drawAlarmWarn = async () => {
+    const warn = alarmEl('warn');
+    const st = platform === 'android' && PRAYERS.some((p) => s.alarms[p.key].on) ? await alarmStatus() : null;
+    const problems = [];
+    if (st?.canScheduleExact === false) problems.push(['Utan tillståndet "Alarm och påminnelser" kan alarmen inte ringa i tid.', 'Tillåt alarm', 'exact']);
+    if (st?.canFullScreen === false) problems.push(['Alarmet får inte visas över låsskärmen – du ser bara en notis.', 'Tillåt på låsskärmen', 'fullscreen']);
+    warn.replaceChildren(...problems.map(([text, label, which]) => {
+      const box = h(`<div class="warn-text"><span>${esc(text)}</span><br><button class="secondary small">${esc(label)}</button></div>`);
+      box.querySelector('button').onclick = async () => { await openAlarmSettings(which); setTimeout(drawAlarmWarn, 800); };
+      return box;
+    }));
+  };
+  const drawAlarms = () => {
+    const upcoming = alarmTimes(withEstimates(state.schedules, s), s, new Date(), 400);
+    const nextOf = (key) => upcoming.find((a) => a.key === key);
+    alarmEl('next').textContent = upcoming.length ? `Nästa alarm: ${alarmLabel(upcoming[0].at)}` : PRAYERS.some((p) => s.alarms[p.key].on) ? 'Inga alarm att visa – det finns inget schema framåt.' : '';
+    alarmEl('rows').replaceChildren(...PRAYERS.map((p) => {
+      const a = s.alarms[p.key];
+      const nxt = a.on && nextOf(p.key);
+      const row = h(`<div class="alarm-row"><label class="alarm-name"><input type="checkbox" ${a.on ? 'checked' : ''} aria-label="Alarm för ${p.name}"/>
+        <span>${p.name}${nxt ? `<small class="muted">${alarmLabel(nxt.at)}</small>` : ''}</span></label>
+        ${a.on ? `<select aria-label="Minuter innan ${p.name}">${ALARM_BEFORE.map((m) =>
+    `<option value="${m}" ${m === a.before ? 'selected' : ''}>${m === 0 ? 'Vid bönetiden' : `${m} min innan`}</option>`).join('')}</select>` : ''}</div>`);
+      row.querySelector('input').onchange = (e) => { a.on = e.target.checked; saveAlarms(); };
+      row.querySelector('select')?.addEventListener('change', (e) => { a.before = +e.target.value; saveAlarms(); });
+      return row;
+    }));
+    drawAlarmWarn();
+  };
+  const saveAlarms = async () => {
+    await saveSettings(s);
+    await refreshNotifications();
+    drawAlarms();
+    renderHealth(card.querySelector('.health-box'));
+    const n = state.notifyResult;
+    alarmEl('msg').textContent = n?.native ? `Sparat – ${n.alarms ?? 0} alarm inlagda.` : 'Sparat.';
+  };
+  drawAlarms();
+  const rows = card.querySelector('.before-rows');
+  const drawBefore = () => rows.replaceChildren(...PRAYERS.filter((p) => s.enabled[p.key]).map((p) => {
+    const row = h(`<div class="chip-row"><span>${p.name}</span><div class="chips">${REMINDER_MINUTES.map((m) =>
+      `<button type="button" class="chip" data-m="${m}" aria-pressed="${s.before[p.key].includes(m)}">${m}</button>`).join('')}</div></div>`);
+    row.onclick = (e) => {
+      const m = +e.target.closest('.chip')?.dataset.m;
+      if (!m) return;
+      s.before[p.key] = s.before[p.key].includes(m) ? s.before[p.key].filter((x) => x !== m) : [...s.before[p.key], m].sort((a, b) => a - b);
+      drawBefore(); persist();
+    };
+    return row;
+  }));
+  drawBefore();
+  card.querySelector('[data-a=before-all]').onclick = () => {
+    const from = card.querySelector('[data-a=before-from]').value;
+    PRAYERS.forEach((p) => { s.before[p.key] = [...s.before[from]]; });
+    drawBefore(); persist();
+  };
   card.querySelector('[data-f=sound]').onchange = (e) => { s.sound = e.target.value; persist(); };
   let preview = null;
   card.querySelector('[data-a=listen]').onclick = () => {
