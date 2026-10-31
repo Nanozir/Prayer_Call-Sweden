@@ -23,7 +23,7 @@ import { hijriDate } from './hijri.js';
 import { monthRows, shiftMonth } from './month.js';
 import { boardHtml, BOARD_PRAYERS } from './board.js';
 import { qiblaBearing, distanceKm, headingFromEvent, turnBy, compassWord } from './qibla.js';
-import { Capacitor } from '@capacitor/core';
+import { platform, isDesktop, getAutoStart, setAutoStart } from './desktop.js';
 
 const app = document.getElementById('app');
 const state = { view: 'home', viewDate: null, anim: null, schedules: {}, settings: null, notifyResult: null, perms: null, draft: null, monthSel: null };
@@ -58,6 +58,8 @@ function openMonth(year, month) {
 
 function render() {
   app.replaceChildren();
+  app.dataset.view = state.view;
+  app.dataset.board = state.view === 'home' && state.settings?.view === 'board' ? '1' : '';
   stopCompass?.();
   clearInterval(clockTimer);
   if (state.view === 'home') renderHome();
@@ -113,7 +115,7 @@ function statusBanners() {
   } else if (state.perms && !state.perms.exact) {
     out.push(['warn', 'Appen får inte använda exakta alarm, så notiser kan komma några minuter sent.', 'exact']);
   }
-  if (Capacitor.getPlatform() === 'ios' && state.notifyResult?.scheduled) {
+  if (platform() === 'ios' && state.notifyResult?.scheduled) {
     out.push(['warn', 'På iPhone kan bara de närmaste dagarnas notiser läggas in åt gången. Öppna appen minst en gång i veckan så fylls de på.']);
   }
   if (state.notifyResult?.error) out.push(['bad', `Kunde inte schemalägga notiser: ${state.notifyResult.error}`]);
@@ -369,6 +371,8 @@ function renderMonth() {
   const wrap = h(`<div class="month-wrap"><table class="month">
     <thead><tr><th>Dag</th>${PRAYERS.map((p) => `<th>${p.name}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`);
   wrap.querySelectorAll('tbody tr').forEach((tr) => {
+    tr.tabIndex = 0;
+    tr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.onclick(); } };
     tr.onclick = () => {
       const d = { year: sel.year, month: sel.month, day: +tr.dataset.day };
       state.view = 'home';
@@ -848,13 +852,14 @@ async function renderHealth(box) {
 
 function renderSettings() {
   const s = state.settings;
+  const desktop = isDesktop();
   const card = h(`<div><section class="card"><h2>Fungerar notiserna?</h2><div class="health-box" role="status" aria-live="polite"></div>
     <button class="secondary small" data-a="recheck">Kontrollera igen</button></section>
     <section class="card"><h2>Notiser</h2><div class="prayers"></div>
     <div class="toggle"><span>Ljud vid bönetiden</span>
-      <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>
+      <select data-f="sound">${SOUND_OPTIONS.map((o) => `<option value="${o.value}" ${o.value === s.sound ? 'selected' : ''}>${desktop && o.value === 'off' ? 'Inget ljud' : o.label}</option>`).join('')}</select></div>
     <div class="row sound-row"><button class="secondary small" data-a="listen">▶ Lyssna</button>
-      <span class="muted">Ljuden är lågmälda från början. De följer telefonens notisvolym och hörs inte i tyst läge.</span></div>
+      <span class="muted">${desktop ? 'Ljuden är lågmälda från början. De följer datorns volym.' : 'Ljuden är lågmälda från början. De följer telefonens notisvolym och hörs inte i tyst läge.'}</span></div>
     <div class="before"><h3>Extra påminnelser innan<br><small class="muted">Minuter före bönetiden. Notisen vid bönetiden kommer alltid också</small></h3><div class="before-rows"></div>
       <div class="row"><select data-a="before-from" aria-label="Kopiera från bön">${PRAYERS.map((p) => `<option value="${p.key}">${p.name}</option>`).join('')}</select>
         <button class="secondary small" data-a="before-all">Samma för alla</button></div></div>
@@ -865,11 +870,12 @@ function renderSettings() {
         <button type="button" class="info-btn" data-a="estimate-info" aria-label="Om beräknade tider">i</button>
         <br><small class="muted">Bara när moskéns schema saknas</small></span>
       <input type="checkbox" data-f="estimate" ${s.estimate ? 'checked' : ''}/></div>
-    <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button><button class="secondary" data-a="exact">Exakta alarm</button></div>
+    ${desktop ? '<label class="toggle"><span>Starta med Windows<br><small class="muted">Appen startar i systemfältet när du loggar in</small></span><input type="checkbox" data-f="autostart" disabled /></label>' : ''}
+    <div class="row" style="margin-top:12px"><button class="secondary" data-a="test">Skicka testnotis</button>${platform() === 'android' ? '<button class="secondary" data-a="exact">Exakta alarm</button>' : ''}</div>
     <p class="muted msg" role="status" aria-live="polite"></p>
   </section>
   <section class="card alarm"><h2>Alarm</h2>
-    <p class="muted">Ett riktigt alarm som ringer tills du stänger av det, även på låsskärmen. Det följer bönetiderna – du slipper ställa om klockan varje dag.</p>
+    <p class="muted">${desktop ? 'Ett alarm som ringer med böneutropet tills du stänger av det eller snoozar i 5 minuter.' : 'Ett riktigt alarm som ringer tills du stänger av det, även på låsskärmen.'} Det följer bönetiderna – du slipper ställa om klockan varje dag.</p>
     <p class="muted alarm-note"></p>
     <div class="alarm-warn"></div>
     <p class="alarm-next" role="status" aria-live="polite"></p>
@@ -896,8 +902,8 @@ function renderSettings() {
   <section class="card"><h2>Om notiserna</h2><p class="muted">
     Notiser skapas bara för datum som finns i ett inlagt schema. När ett schema gått ut skickas inga bönenotiser
     (så du aldrig får fel tider) – istället får du en påminnelse om att lägga in nästa månad.<br><br>
-    Vissa telefoner (t.ex. OnePlus, Oppo, Xiaomi, Samsung) stänger av appar i bakgrunden för att spara batteri.
-    Om notiser uteblir: ställ in batterioptimering för Salah-kalender till <b>Obegränsad / Tillåt</b>.
+    ${desktop ? 'Appen ligger kvar i systemfältet så att notiser och alarm kommer även när fönstret är stängt. De kommer så länge datorn är på och appen körs.'
+    : 'Vissa telefoner (t.ex. OnePlus, Oppo, Xiaomi, Samsung) stänger av appar i bakgrunden för att spara batteri. Om notiser uteblir: ställ in batterioptimering för Salah-kalender till <b>Obegränsad / Tillåt</b>.'}
   </p></section>
   <p class="muted center">Salah-kalender version ${__APP_VERSION__}</p></div>`);
   const box = card.querySelector('.prayers');
@@ -914,12 +920,13 @@ function renderSettings() {
     msg.textContent = n?.native ? `Sparat – ${n.scheduled ?? 0} notiser schemalagda.` : 'Sparat.';
   };
   const alarmEl = (c) => card.querySelector(`.alarm-${c}`);
-  const platform = Capacitor.getPlatform();
-  alarmEl('note').textContent = platform === 'ios' ? 'På iPhone blir alarmet en notis med ljud (riktiga alarm kräver iOS 26).'
-    : isNative() ? '' : 'Alarm fungerar bara i den installerade appen.';
+  const plat = platform();
+  alarmEl('note').textContent = plat === 'ios' ? 'På iPhone blir alarmet en notis med ljud (riktiga alarm kräver iOS 26).'
+    : desktop ? 'Alarmet öppnas i ett fönster överst och ringer med böneutropet. Appen ligger kvar i systemfältet så att alarmen kommer även när fönstret är stängt.'
+      : isNative() ? '' : 'Alarm fungerar bara i den installerade appen.';
   const drawAlarmWarn = async () => {
     const warn = alarmEl('warn');
-    const st = platform === 'android' && PRAYERS.some((p) => s.alarms[p.key].on) ? await alarmStatus() : null;
+    const st = plat === 'android' && PRAYERS.some((p) => s.alarms[p.key].on) ? await alarmStatus() : null;
     const problems = [];
     if (st?.canScheduleExact === false) problems.push(['Utan tillståndet "Alarm och påminnelser" kan alarmen inte ringa i tid.', 'Tillåt alarm', 'exact']);
     if (st?.canFullScreen === false) problems.push(['Alarmet får inte visas över låsskärmen – du ser bara en notis.', 'Tillåt på låsskärmen', 'fullscreen']);
@@ -1042,16 +1049,38 @@ function renderSettings() {
   renderHealth(healthBox);
   card.querySelector('[data-a=recheck]').onclick = async () => { await refreshNotifications(); renderHealth(healthBox); };
   card.querySelector('[data-a=test]').onclick = async () => {
-    msg.textContent = (await testNotification(s)) ? 'Testnotis kommer om 5 sekunder.' : 'Notiser fungerar bara i appen och kräver tillstånd.';
+    msg.textContent = (await testNotification(s)) ? (desktop ? 'Testnotis skickad.' : 'Testnotis kommer om 5 sekunder.') : 'Notiser fungerar bara i appen och kräver tillstånd.';
   };
-  card.querySelector('[data-a=exact]').onclick = async () => { await openExactAlarmSettings(); await persist(); };
+  const exactBtn = card.querySelector('[data-a=exact]');
+  if (exactBtn) exactBtn.onclick = async () => { await openExactAlarmSettings(); await persist(); };
+  const auto = card.querySelector('[data-f=autostart]');
+  if (auto) {
+    getAutoStart().then((on) => { auto.checked = on; auto.disabled = false; });
+    auto.onchange = async () => { await setAutoStart(auto.checked); msg.textContent = auto.checked ? 'Appen startar med Windows.' : 'Appen startar inte längre med Windows.'; };
+  }
   app.append(card);
 }
 
 // ---------------------------------------------------------------- startup
 
+// Desktop: ←/→ change day (Idag) or month (Månad). Not while typing or with a dialog open.
+function setupKeys() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+    if (document.querySelector('dialog[open]') || e.target.closest?.('input, select, textarea, [contenteditable]')) return;
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    if (state.view === 'home') moveDay(dir);
+    else if (state.view === 'month') app.querySelector(`.nav-arrow[aria-label="${dir > 0 ? 'Nästa' : 'Föregående'} månad"]`)?.click();
+    else return;
+    e.preventDefault();
+  });
+}
+
 async function init() {
+  document.documentElement.dataset.platform = platform();
   setupSwipe();
+  setupKeys();
   state.schedules = await loadSchedules();
   state.settings = await loadSettings();
   render();
