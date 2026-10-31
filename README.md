@@ -75,6 +75,20 @@ kan appen delas via TestFlight utan 7-dagarsgränsen.
 Gäller alla iPhone-varianter av appen: max 64 schemalagda notiser (appen fyller på när den
 öppnas – öppna den minst en gång i veckan) och notiserna använder iPhonens standardljud.
 
+## Windows
+
+Det finns en version för Windows-datorer (samma app, inbyggd i ett skrivbordsprogram).
+
+1. Ladda ner `…-windows-setup.exe` (installerare) eller den portabla `.exe` från [Releases](../../releases).
+2. Starta den. Appen ligger kvar i **systemfältet** (vid klockan) när du stänger fönstret, så att notiser och
+   alarm kommer även då. Avsluta helt via ikonen i systemfältet.
+3. Filerna är inte kodsignerade, så Windows SmartScreen kan varna: välj **Mer info → Kör ändå**.
+4. Notiser och alarm kommer så länge datorn är på och appen körs. Under Inställningar finns
+   **Starta med Windows** som startar appen när du loggar in. Alarmet öppnas i ett fönster överst och ringer
+   med böneutropet tills du stänger av det eller snoozar i 5 minuter.
+
+Tangentbord: ←/→ byter dag på Idag (och månad i månadsvyn), Esc stänger dialogrutor.
+
 ## Beräknade tider (nödläge)
 
 Kan slås på under Inställningar. Saknas moskéns schema för innevarande eller nästa månad räknas
@@ -167,6 +181,9 @@ npm run build && npx cap sync   # öppna sedan android/ i Android Studio eller i
 - `src/pdf.js`, `src/schedule-text.js` – PDF-import (pdf.js, offline) och tolkning av tabelltext
 - `src/board.js` – moskétavlan
 - `src/notify.js` – schemalägger notiser (alltid om från början, inget blir kvar) och widgetdata
+- `src/desktop.js` – Windows-appen: `window.salahDesktop` (Electron-brygga med `schedule`, `cancelAll`,
+  `testNotification`, `getAutoStart`/`setAutoStart`) tar emot notiser och alarm i stället för Capacitor;
+  utan bryggan görs ingenting. Plattform: `platform()` ger `android`, `ios`, `desktop` eller `web`
 - `src/health.js` – "Fungerar notiserna?"-listan
 - `src/alarm.js`, `src/month.js` – alarmtider och månadsvyn; native-alarmet ligger i
   `AlarmScheduler`/`AlarmService`/`AlarmActivity` (Android)

@@ -7,6 +7,20 @@
     battery: { unrestricted: true, manufacturer: 'Google' }, alarm: { canScheduleExact: true, canFullScreen: true }, storage: {},
   }, window.__mockConfig || {});
   const mock = window.__mock = { calls: [], pending: [], channels: {}, storage: { ...cfg.storage }, cfg };
+  if (cfg.platform === 'desktop') {
+    // Windows app: no Capacitor native side, just the Electron bridge (recorded); storage is localStorage.
+    for (const [k, v] of Object.entries(cfg.storage)) localStorage.setItem(`CapacitorStorage.${k}`, v);
+    Object.assign(mock, { schedules: [], tests: 0, autoStart: false, cancelled: 0 });
+    window.salahDesktop = {
+      isDesktop: true, version: 'test',
+      schedule: async (items) => { mock.calls.push('salahDesktop.schedule'); mock.items = items; mock.schedules.push(items); return { scheduled: items.length }; },
+      cancelAll: async () => { mock.cancelled++; },
+      testNotification: async () => { mock.tests++; },
+      getAutoStart: async () => mock.autoStart,
+      setAutoStart: async (on) => { mock.autoStart = on; },
+    };
+    return;
+  }
   const handlers = {
     Preferences: {
       get: ({ key }) => ({ value: key in mock.storage ? mock.storage[key] : null }),
