@@ -3,6 +3,13 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.9.1] – 2026-10-31
+
+### Fixat
+- **Alarmet gick inte att stänga av.** Nu öppnas alarmskärmen med stora knapparna *Stäng av* och
+  *Snooza 5 min* direkt när alarmet ringer (om appen är öppen) och när du öppnar appen medan det ringer.
+  Notisen visas direkt i stället för efter ca 10 sekunder, och att svepa bort den stänger av alarmet.
+
 ## [1.9.0] – 2026-10-29
 
 ### Nytt

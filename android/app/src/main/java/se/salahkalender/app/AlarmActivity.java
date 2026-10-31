@@ -103,6 +103,7 @@ public class AlarmActivity extends Activity {
         b.setBackgroundColor(Color.parseColor(color));
         b.setMinimumHeight((int) (heightDp * getResources().getDisplayMetrics().density));
         b.setOnClickListener((View v) -> {
+            AlarmService.stopRequested = true;
             startService(new Intent(this, AlarmService.class).setAction(action));
             finish();
         });
