@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alarm</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; box-sizing: border-box;
+      background: #0f5132; color: #fff; font-family: 'Segoe UI', system-ui, sans-serif; text-align: center; animation: pulse 1.2s ease-in-out infinite alternate; }
+    @keyframes pulse { from { background: #0f5132; } to { background: #198754; } }
+    h1 { margin: 0; font-size: 34px; }
+    p { margin: 0; font-size: 20px; opacity: .95; }
+    .row { display: flex; gap: 14px; width: 100%; margin-top: 10px; }
+    button { flex: 1; font: inherit; font-size: 24px; font-weight: 700; padding: 22px 10px; border: 4px solid #fff; border-radius: 14px; cursor: pointer; }
+    #dismiss { background: #fff; color: #0f5132; }
+    #snooze { background: transparent; color: #fff; }
+    button:focus-visible { outline: 4px solid #ffc107; outline-offset: 3px; }
+    small { opacity: .8; }
+    @media (prefers-reduced-motion: reduce) { body { animation: none; } }
+  </style>
+  <script src="alarm.js"></script>
+</head>
+<body>
+  <h1 id="title">Alarm</h1>
+  <p id="body"></p>
+  <div class="row">
+    <button id="dismiss" autofocus>Stäng av</button>
+    <button id="snooze">Snooza 5 min</button>
+  </div>
+  <small>Esc eller Enter stänger av</small>
+</body>
+</html>
