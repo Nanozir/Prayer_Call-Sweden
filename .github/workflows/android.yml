@@ -16,6 +16,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
     steps:
       - uses: actions/checkout@v7
 
@@ -140,3 +143,56 @@ jobs:
             Salah-kalender-v*.apk.sha256
             Salah-kalender-v*-google-play.aab
           make_latest: true
+
+  windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installera beroenden
+        run: npm ci
+
+      - name: Bygg Windows-appen
+        run: npm run desktop:build
+
+      - name: Kontrollera att Windows-filerna finns
+        shell: bash
+        run: |
+          for f in "release/Salah-kalender-v${{ needs.build.outputs.version }}-windows-setup.exe" "release/Salah-kalender-v${{ needs.build.outputs.version }}-windows-portable.exe"; do
+            [ -s "$f" ] || { echo "::error::$f saknas eller är tom"; exit 1; }
+            ls -l "$f"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Salah-kalender-v${{ needs.build.outputs.version }}-${{ github.sha }}-windows
+          path: |
+            release/Salah-kalender-v*-windows-setup.exe
+            release/Salah-kalender-v*-windows-portable.exe
+
+      - name: Bifoga till release
+        if: needs.build.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ needs.build.outputs.version }}"
+          # The release is created by the build job; wait until it is visible.
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && break
+            echo "Release $tag syns inte än (försök $i) – väntar..."
+            sleep 15
+          done
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null || { echo "::error::Release $tag hittades inte"; exit 1; }
+          for i in 1 2 3; do
+            gh release upload "$tag" release/Salah-kalender-v*-windows-setup.exe release/Salah-kalender-v*-windows-portable.exe --clobber --repo "$GITHUB_REPOSITORY" && exit 0
+            echo "Uppladdningen misslyckades (försök $i) – försöker igen..."
+            sleep 15
+          done
+          exit 1

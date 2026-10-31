@@ -1,8 +1,11 @@
 {
   "name": "salah-kalender",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
+  "author": "NanPan",
+  "description": "Salah-kalender",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/copy-ocr-assets.mjs && vite build",
@@ -11,7 +14,9 @@
     "sounds": "node scripts/make-sounds.mjs",
     "test:ocr-bench": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/ocr-bench.mjs --strict",
     "test:native": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/native-e2e.mjs",
-    "test:pdf": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/pdf-e2e.mjs"
+    "test:pdf": "node scripts/copy-ocr-assets.mjs && vite build && node tests/e2e/pdf-e2e.mjs",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:build": "npm run build && electron-builder --win nsis portable --x64 --publish never"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -28,7 +33,39 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
     "playwright-core": "^1.64.0",
     "vite": "^8.3.5"
+  },
+  "build": {
+    "appId": "se.salahkalender.app",
+    "productName": "Salah-kalender",
+    "copyright": "NanPan",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "build/icon.png",
+      "package.json",
+      "!node_modules/**"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Salah-kalender-v${version}-windows-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Salah-kalender-v${version}-windows-portable.${ext}"
+    }
   }
 }

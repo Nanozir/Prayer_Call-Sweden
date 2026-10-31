@@ -25,8 +25,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 let failed = false;
 const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); if (!cond) failed = true; };
 
-async function open(config, shot) {
-  const page = await browser.newPage({ viewport: { width: 400, height: 900 } });
+async function open(config, width = 400) {
+  const page = await browser.newPage({ viewport: { width, height: width > 400 ? 800 : 900 } });
   page.on('pageerror', (e) => { console.log('pageerror', e.message); failed = true; });
   await page.addInitScript(() => {
     const fixed = new Date('2026-10-08T06:13:00Z').getTime();
@@ -36,7 +36,7 @@ async function open(config, shot) {
   await page.addInitScript((c) => { window.__mockConfig = c; }, config);
   await page.addInitScript(mockSrc);
   await page.goto(url);
-  await page.waitForFunction(() => window.__mock.calls.includes('LocalNotifications.schedule') || window.__mock.calls.includes('LocalNotifications.getPending'));
+  await page.waitForFunction(() => ['LocalNotifications.schedule', 'LocalNotifications.getPending', 'salahDesktop.schedule'].some((c) => window.__mock.calls.includes(c)));
   await page.waitForTimeout(300);
   return page;
 }
@@ -127,6 +127,69 @@ const storage = { schedules: JSON.stringify({ '2026-10': october }), settings: J
   check((await page.evaluate(() => window.__mock.alarms)) === undefined, 'iPhone: inga Android-alarm');
   await page.click('nav button[data-view=settings]');
   check(/riktiga alarm kräver iOS 26/.test(await page.$eval('.alarm-note', (e) => e.textContent)), 'iPhone: not om alarm i inställningarna');
+  await page.close();
+}
+
+// --- Windows desktop app: bridge instead of Capacitor ------------------------------
+{
+  const page = await open({ platform: 'desktop', storage }, 1280);
+  const items = await page.evaluate(() => window.__mock.items);
+  const now = new Date('2026-10-08T06:13:00Z').getTime();
+  check(items.length > 0 && items.length <= 500, `Desktop: ${items.length} poster skickade till bryggan`);
+  check(new Set(items.map((i) => i.id)).size === items.length && items.every((i) => i.at > now), 'Desktop: unika ID, inget bakåt i tiden');
+  check(items.every((i, k) => k === 0 || items[k - 1].at <= i.at), 'Desktop: sorterade i tidsordning');
+  const asr = items.find((i) => i.kind === 'prayer' && /Asr/.test(i.title));
+  check(asr && asr.at === Date.UTC(2026, 9, 8, 13, 33) && asr.sound === 'adhan', 'Desktop: Asr-notis vid 15:33 svensk tid med böneutrop');
+  check(items.some((i) => i.kind === 'before' && /Påminnelse/.test(i.title)), 'Desktop: påminnelser (before) finns');
+  check(items.some((i) => i.kind === 'info'), 'Desktop: schemapåminnelse (info) finns');
+  check(items.every((i) => i.kind !== 'alarm'), 'Desktop: inga alarm innan något slagits på');
+  check(await page.$eval('#app', () => !/webbversionen/.test(document.body.textContent)), 'Desktop: ingen "webbversionen"-banner');
+  await page.click('nav button[data-view=settings]');
+  await page.waitForSelector('.health li');
+  const health = await page.$eval('.health', (e) => e.textContent);
+  check(!/batteri|exakta/i.test(health) && /notiser inlagda/.test(health), 'Desktop: kontrollen visar inga Android-problem');
+  check((await page.$('[data-a=exact]')) === null, 'Desktop: knappen "Exakta alarm" är dold');
+  const settingsText = await page.$eval('#app', (e) => e.textContent);
+  check(/systemfältet/.test(settingsText), 'Desktop: not om systemfältet');
+  await page.click('[data-a=test]');
+  await page.waitForFunction(() => window.__mock.tests === 1);
+  check(true, 'Desktop: testnotis anropar bryggan');
+  await page.waitForFunction(() => !document.querySelector('[data-f=autostart]').disabled);
+  await page.check('[data-f=autostart]');
+  await page.waitForFunction(() => window.__mock.autoStart === true);
+  check(true, 'Desktop: "Starta med Windows" anropar setAutoStart');
+  await page.check('.alarm-row:first-child input');
+  await page.waitForFunction(() => window.__mock.items.some((i) => i.kind === 'alarm'));
+  const alarms = (await page.evaluate(() => window.__mock.items)).filter((i) => i.kind === 'alarm');
+  const fajr9 = Date.UTC(2026, 9, 9) + (october.days[8][0] - 120 - 15) * 60_000;
+  check(alarms[0].at === fajr9 && alarms[0].sound === 'adhan', `Desktop: Fajr-alarm 15 min före Fajr (${new Date(alarms[0].at).toISOString()})`);
+  check(!/iPhone|iOS/.test(await page.$eval('.alarm-note', (e) => e.textContent)), 'Desktop: alarmkortet utan iOS-text');
+  // Wide layout + keyboard
+  await page.click('nav button[data-view=home]');
+  const before = await page.$eval('.nav-day', (e) => e.textContent);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction((b) => document.querySelector('.nav-day').textContent !== b, before);
+  check(true, 'Desktop: högerpil byter dag');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForFunction((b) => document.querySelector('.nav-day').textContent === b, before);
+  const w = await page.$eval('main', (e) => e.getBoundingClientRect().width);
+  check(w <= 640, `Desktop: centrerad kolumn (${Math.round(w)} px)`);
+  if (process.env.WIDE_SHOT) {
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: process.env.WIDE_SHOT });
+    await page.click('[data-a=month]');
+    await page.waitForSelector('.month');
+    await page.screenshot({ path: process.env.WIDE_SHOT.replace('.png', '-month.png') });
+    await page.click('nav button[data-view=home]');
+    await page.click('[data-v=board]');
+    await page.screenshot({ path: process.env.WIDE_SHOT.replace('.png', '-board.png') });
+  }
+  await page.close();
+}
+{
+  const page = await open({ platform: 'desktop', storage: { schedules: storage.schedules, settings: JSON.stringify({ sound: 'off', before: { fajr: [10] } }) } }, 1280);
+  const items = await page.evaluate(() => window.__mock.items);
+  check(items.filter((i) => i.kind === 'prayer').every((i) => i.sound === 'off'), 'Desktop: "inget ljud" ger sound off');
   await page.close();
 }
 

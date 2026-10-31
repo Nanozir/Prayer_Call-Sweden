@@ -9,6 +9,7 @@ import { coverageEnd, scheduleStatus, REMINDER_MINUTES } from './store.js';
 import { withEstimates } from './estimate.js';
 import { updateWidget, setAlarms, cancelAlarms, alarmStatus } from './native.js';
 import { alarmTimes } from './alarm.js';
+import { isDesktop, desktopItems, desktopSchedule, desktopTest } from './desktop.js';
 
 // Android ties sound to the notification channel (fixed once created), so each
 // sound choice gets its own channel. Sound files live in android/.../res/raw.
@@ -48,10 +49,12 @@ async function ensureChannels() {
   }
 }
 
-export const isNative = () => Capacitor.isNativePlatform();
+// Android/iOS app or the Windows app; false in a plain browser.
+export const isNative = () => isDesktop() || Capacitor.isNativePlatform();
 
 export async function ensurePermissions() {
   if (!isNative()) return { display: false, exact: false };
+  if (isDesktop()) return { display: true, exact: true };
   let perm = await LocalNotifications.checkPermissions();
   if (perm.display !== 'granted') perm = await LocalNotifications.requestPermissions();
   let exact = true;
@@ -70,7 +73,7 @@ export async function openExactAlarmSettings() {
 // Ids: see notificationId in time.js (slot 0 = on time, 1..7 = reminders, 8 = alarm).
 export { notificationId };
 
-export function prayerNotifications(schedules, settings, now, reserve = 0) {
+export function prayerNotifications(schedules, settings, now, reserve = 0, max = MAX) {
   const list = [];
   for (const sched of Object.values(schedules)) {
     if (scheduleStatus(sched) === 'expired') continue;
@@ -107,10 +110,10 @@ export function prayerNotifications(schedules, settings, now, reserve = 0) {
     });
   }
   // Leave room for the two schedule reminders (iOS caps pending notifications at 64).
-  return list.sort((a, b) => a.schedule.at - b.schedule.at).slice(0, MAX - 2 - reserve);
+  return list.sort((a, b) => a.schedule.at - b.schedule.at).slice(0, max - 2 - reserve);
 }
 
-function reminderNotifications(schedules, now, settings = {}) {
+export function reminderNotifications(schedules, now, settings = {}) {
   const end = coverageEnd(schedules);
   if (!end) return [];
   const label = monthLabel(end.year, end.month);
@@ -145,8 +148,27 @@ function iosAlarmNotifications(alarms) {
   }));
 }
 
+// The desktop app (no OS limits): the next DESKTOP_DAYS days, replacing everything scheduled.
+const DESKTOP_DAYS = 60;
+let lastDesktop = { count: 0, last: null };
+
+async function rescheduleDesktop(schedules, settings) {
+  const now = new Date();
+  const effective = withEstimates(schedules, settings);
+  const alarms = alarmTimes(effective, settings, now, 400);
+  const prayers = prayerNotifications(effective, settings, now, 0, Infinity);
+  const reminders = settings.reminders ? reminderNotifications(schedules, now, settings) : [];
+  const items = desktopItems({ prayers, reminders, alarms }, settings, now, { max: 500, days: DESKTOP_DAYS });
+  const { scheduled } = await desktopSchedule(items);
+  const kept = new Set(items.map((i) => i.id));
+  const until = prayers.filter((n) => kept.has(n.id)).at(-1)?.schedule.at;
+  lastDesktop = { count: scheduled ?? items.length, last: until ?? null };
+  return { scheduled: lastDesktop.count, native: true, exact: true, alarms: alarms.filter((a) => kept.has(a.id)).length, until };
+}
+
 export async function rescheduleAll(schedules, settings) {
   if (!isNative()) return { scheduled: 0, native: false };
+  if (isDesktop()) return rescheduleDesktop(schedules, settings);
   const android = Capacitor.getPlatform() === 'android';
   const now = new Date();
   const effective = withEstimates(schedules, settings);
@@ -174,6 +196,7 @@ export async function rescheduleAll(schedules, settings) {
 
 export async function testNotification(settings) {
   if (!isNative()) return false;
+  if (isDesktop()) return desktopTest();
   const perms = await ensurePermissions();
   if (!perms.display) return false;
   await ensureChannels();
@@ -214,6 +237,7 @@ export function widgetPrayers(schedules, now = new Date(), days = 14) {
 /** Facts for the "Fungerar notiserna?" check in Settings. */
 export async function notificationFacts() {
   if (!isNative()) return { native: false };
+  if (isDesktop()) return { native: true, platform: 'desktop', display: true, exact: null, alarm: null, pending: lastDesktop.count, limit: 500, last: lastDesktop.last };
   const platform = Capacitor.getPlatform();
   const perm = await LocalNotifications.checkPermissions();
   let exact = null;
