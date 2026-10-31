@@ -3,6 +3,16 @@
 Versionsnumren följer [semantisk versionering](https://semver.org/lang/sv/):
 `STOR.MINDRE.FIX` – FIX för buggrättningar, MINDRE för nya funktioner, STOR för stora förändringar.
 
+## [1.10.0] – 2026-10-31
+
+### Nytt
+- **Windows-app:** samma app som skrivbordsprogram för Windows (installerare och portabel `.exe` under
+  *Releases*). Ligger kvar i systemfältet, skickar bönenotiser och påminnelser även när fönstret är stängt,
+  och alarmen öppnas i ett fönster överst med *Stäng av* och *Snooza 5 min*. *Starta med Windows* ställs in
+  under *Inställningar*. Programmet är inte kodsignerat, så Windows kan varna första gången.
+- **Bred skärm:** på datorskärmar används ett sidofält i stället för flikraden längst ned, månadsvyn och
+  moskétavlan använder bredden och ←/→ byter dag (på *Idag*) eller månad (i månadsvyn).
+
 ## [1.9.1] – 2026-10-31
 
 ### Fixat
