@@ -35,6 +35,9 @@ public class AlarmService extends Service {
     static final long MAX_RING_MS = 5 * 60_000L;
     static final long SNOOZE_MS = 5 * 60_000L;
     static volatile boolean ringing = false;
+    static volatile boolean stopRequested = false; // set by AlarmActivity's buttons, so the app doesn't reopen it
+    static volatile String ringingTitle = "";
+    static volatile String ringingBody = "";
 
     private MediaPlayer player;
     private Vibrator vibrator;
@@ -83,11 +86,26 @@ public class AlarmService extends Service {
             if (nm != null) nm.notify(NOTIFICATION_ID, n);
         }
         ringing = true;
+        stopRequested = false;
+        ringingTitle = title;
+        ringingBody = body;
         stopPlayers();
         playSound();
         vibrate();
+        showScreen();
         handler.removeCallbacks(timeout);
         handler.postDelayed(timeout, MAX_RING_MS);
+    }
+
+    /** Works when the app is visible; otherwise Android only allows the full-screen notification. */
+    private void showScreen() {
+        try {
+            startActivity(new Intent(this, AlarmActivity.class)
+                .putExtra("title", title).putExtra("body", body)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP));
+        } catch (Exception ignored) {
+            // Notification actions still work.
+        }
     }
 
     private void stopRinging() {
@@ -165,6 +183,8 @@ public class AlarmService extends Service {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setDeleteIntent(servicePi(4, ACTION_DISMISS))
             .setContentIntent(openPi)
             .setFullScreenIntent(openPi, true)
             .addAction(0, "Snooza 5 min", servicePi(2, ACTION_SNOOZE))
