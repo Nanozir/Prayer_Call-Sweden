@@ -32,7 +32,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.3",
+    "@capacitor/cli": "^8.6.0",
     "electron": "45.2.1",
     "electron-builder": "26.18.0",
     "playwright-core": "^1.64.0",
